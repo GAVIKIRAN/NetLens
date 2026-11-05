@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# Explainable AI-Based Real-Time Network Intrusion Detection System
+# Python 3.11+.  These exact versions were installed together and run with the
+# test suite on Windows 11 with Python 3.12.10.
+# ---------------------------------------------------------------------------
+
+# --- Core numeric / data stack ---------------------------------------------
+numpy==2.5.4
+pandas==3.1.0
+scipy==1.18.1
+
+# --- Machine learning -------------------------------------------------------
+scikit-learn==1.9.1
+xgboost==3.4.1
+joblib==1.6.0
+
+# --- Explainable AI ---------------------------------------------------------
+shap==0.54.1
+lime==0.2.0.1
+
+# --- Visualisation ----------------------------------------------------------
+matplotlib==3.11.2
+plotly==7.1.0
+
+# --- Dashboard --------------------------------------------------------------
+streamlit==1.66.1
+
+# --- Network capture --------------------------------------------------------
+# Scapy is the primary capture backend. On Windows it additionally requires the
+# Npcap driver (https://npcap.com) — see README "Installation".
+scapy==2.8.0
+
+# --- Configuration / serialisation -----------------------------------------
+PyYAML==6.0.3
+
+# --- Testing ----------------------------------------------------------------
+pytest==9.2.0
+
+# --- Optional extras (NOT installed by default) -----------------------------
+# pyshark>=0.6          # alternative capture backend, requires Wireshark/tshark

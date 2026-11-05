@@ -1,0 +1,360 @@
+# ===========================================================================
+#  Explainable AI-Based Real-Time Network Intrusion Detection System
+#  Master configuration file
+#
+#  Every path may be absolute or relative to the project root.
+#  Any value here can be overridden with an environment variable using the
+#  prefix NIDS_ and double underscores for nesting, e.g.
+#      set NIDS_NETWORK__INTERFACE=Ethernet
+#      set NIDS_PATHS__RAW_DATA_DIR=D:\datasets\CICIDS2017
+# ===========================================================================
+
+project:
+  name: "Explainable AI-Based Real-Time Network Intrusion Detection System"
+  short_name: "NetLens"
+  version: "1.0.0"
+  author: "MCA Final Year Project"
+
+# ---------------------------------------------------------------------------
+# Filesystem layout
+# ---------------------------------------------------------------------------
+paths:
+  raw_data_dir: "data/raw"            # put the CIC-IDS2017 CSV files here
+  processed_data_dir: "data/processed"
+  demo_data_dir: "data/demo"
+  model_dir: "models/trained"
+  preprocessing_dir: "models/preprocessing"
+  reports_dir: "reports"
+  log_dir: "logs"
+  database_path: "data/nids.db"
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: "INFO"                        # DEBUG | INFO | WARNING | ERROR
+  console: true
+  file: true
+  filename: "nids.log"
+  max_bytes: 10485760                  # 10 MB per file
+  backup_count: 5
+  format: "%(asctime)s | %(levelname)-8s | %(name)-28s | %(message)s"
+
+# ---------------------------------------------------------------------------
+# Dataset handling (Phase 1)
+# ---------------------------------------------------------------------------
+dataset:
+  # Glob patterns used to auto-discover CSV files inside raw_data_dir.
+  # Recursive search is used, so sub-folders are fine.
+  file_patterns: ["*.csv", "*.CSV"]
+  encoding: "latin-1"                  # CIC-IDS2017 files contain non-UTF8 bytes
+  # Hard cap on rows loaded per file (null = no cap). Useful on low-RAM machines.
+  max_rows_per_file: null
+  # Stratified cap on the total number of rows used for training.
+  # CIC-IDS2017 has ~2.8M rows; this cap keeps memory and training time bounded.
+  max_total_rows: 400000
+  # Stratified cap per class, applied before max_total_rows. Prevents BENIGN
+  # from swamping every attack class. null = disabled.
+  max_rows_per_class: 60000
+  # Classes with fewer than this many samples are merged into "Rare_Attack"
+  # (they cannot be learned or evaluated reliably).
+  min_samples_per_class: 50
+  rare_class_label: "Rare_Attack"
+  # Column that holds the ground-truth label (matched case/space-insensitively).
+  label_column: "Label"
+  drop_duplicates: true
+  random_state: 42
+
+# ---------------------------------------------------------------------------
+# Feature policy (Phase 3) -- see src/features/contract.py for the full contract
+# ---------------------------------------------------------------------------
+features:
+  # Include Destination Port as a (bucketed) model input.
+  # WARNING: CIC-IDS2017 attack classes are almost perfectly separable by port,
+  # so enabling this inflates offline accuracy and destroys live generalisation.
+  # Left OFF by default. See README -> "Limitations".
+  use_destination_port: false
+  # Protocol number (6=TCP, 17=UDP, 1=ICMP) as a one-hot categorical feature.
+  use_protocol: true
+  # TCP flag and header-length columns whose published values could not be
+  # reproduced from packets. Left OFF so the model cannot rely on values that mean
+  # something different at detection time. Check them with
+  # `python scripts/audit_dataset_columns.py` before turning this on.
+  use_unverified_columns: false
+  # Length statistics basis. CICFlowMeter uses the L4 payload size.
+  #   payload -> transport payload bytes (CICFlowMeter compatible, recommended)
+  #   frame   -> full captured frame length
+  packet_length_basis: "payload"
+
+# ---------------------------------------------------------------------------
+# Preprocessing (Phase 2)
+# ---------------------------------------------------------------------------
+preprocessing:
+  test_size: 0.20                      # fraction held out as the TEST set
+  validation_size: 0.20                # fraction of the remainder used for VALIDATION
+  stratify: true
+  numeric_imputation: "median"         # median | mean | constant
+  imputation_fill_value: 0.0           # used only when numeric_imputation == constant
+  scaler: "standard"                   # standard | minmax | robust | none
+  clip_quantile: 0.999                 # winsorise numeric features at this quantile (null disables)
+  feature_selection:
+    enabled: true
+    variance_threshold: 0.0            # drop constant columns
+    correlation_threshold: 0.98        # drop one of any pair above this |r| (null disables)
+    importance_top_k: null             # keep only top-K by RF importance (null = keep all)
+  class_balance:
+    strategy: "class_weight"           # class_weight | none
+    # "class_weight" uses balanced class weights inside each estimator.
+    # No synthetic oversampling is used: SMOTE on 60+ dimensional flow features
+    # produces records that do not correspond to any physically realisable flow.
+
+# ---------------------------------------------------------------------------
+# Model training (Phases 4 & 5)
+# ---------------------------------------------------------------------------
+training:
+  random_state: 42
+  n_jobs: -1
+  models:
+    random_forest:
+      enabled: true
+      params:
+        n_estimators: 200
+        max_depth: 30
+        min_samples_split: 4
+        min_samples_leaf: 2
+        max_features: "sqrt"
+        n_jobs: -1
+    decision_tree:
+      enabled: true
+      params:
+        max_depth: 30
+        min_samples_split: 4
+        min_samples_leaf: 2
+    logistic_regression:
+      enabled: true
+      params:
+        max_iter: 1000
+        C: 1.0
+        solver: "saga"
+    svm:
+      # LinearSVC wrapped in CalibratedClassifierCV so probabilities exist.
+      # Disabled by default because it scales poorly with row count.
+      enabled: false
+      max_train_rows: 50000            # sub-sample cap for SVM only
+      params:
+        C: 1.0
+        max_iter: 5000
+    xgboost:
+      enabled: true
+      params:
+        n_estimators: 300
+        max_depth: 8
+        learning_rate: 0.2
+        subsample: 0.9
+        colsample_bytree: 0.9
+        tree_method: "hist"
+        n_jobs: -1
+
+# ---------------------------------------------------------------------------
+# Model selection (Phase 5)
+# ---------------------------------------------------------------------------
+model_selection:
+  # Metric measured on the VALIDATION split (never the test split).
+  # macro_f1 is the default because it weights every attack class equally,
+  # which is what matters when BENIGN dominates the data.
+  primary_metric: "macro_f1"           # macro_f1 | weighted_f1 | accuracy | balanced_accuracy
+  # If two models are within this absolute margin on the primary metric,
+  # the faster one (lower median inference latency) wins.
+  tie_break_margin: 0.005
+
+# ---------------------------------------------------------------------------
+# Inference & risk scoring (Phase 7)
+# ---------------------------------------------------------------------------
+inference:
+  benign_label: "BENIGN"
+  # A flow is only reported as an attack when the winning attack class
+  # probability is at least this value. Raise it to cut false positives on a
+  # live network, lower it to increase sensitivity.
+  attack_probability_threshold: 0.60
+  batch_size: 256
+
+risk:
+  # risk = 100 * (w_severity*severity + w_confidence*confidence + w_volume*volume)
+  # See src/inference/risk.py for the exact, documented implementation.
+  weights:
+    severity: 0.55
+    confidence: 0.30
+    volume: 0.15
+  # Packets/second that corresponds to volume factor = 1.0 (log-scaled).
+  volume_reference_pps: 5000.0
+  # Risk band boundaries (score is 0-100).
+  bands:
+    low: 25
+    medium: 50
+    high: 75
+  # Per-class severity in [0, 1]. Unknown classes fall back to default_severity.
+  default_severity: 0.65
+  severity:
+    BENIGN: 0.00
+    PortScan: 0.50
+    FTP-Patator: 0.60
+    SSH-Patator: 0.60
+    Brute Force: 0.60
+    DoS slowloris: 0.70
+    DoS Slowhttptest: 0.70
+    DoS Hulk: 0.75
+    DoS GoldenEye: 0.75
+    DDoS: 0.85
+    Bot: 0.80
+    Web Attack - Brute Force: 0.75
+    Web Attack - XSS: 0.80
+    Web Attack - Sql Injection: 0.90
+    Infiltration: 0.90
+    Heartbleed: 0.95
+    Rare_Attack: 0.70
+  # Alerts are written to the database at or above this band.
+  alert_min_band: "MEDIUM"             # LOW | MEDIUM | HIGH | CRITICAL
+
+# ---------------------------------------------------------------------------
+# Hybrid detection: behaviour (layer 2) and correlation (layer 3)
+# ---------------------------------------------------------------------------
+detection:
+  enabled: true
+  # Scored flows waiting for the worker. Beyond this they are dropped and counted,
+  # so a backlog cannot stall capture or use unbounded memory.
+  worker_queue_size: 5000
+  behavior:
+    window_seconds: 120                # sliding window for per-source attempts
+    rate_window_seconds: 10            # shorter window for rate checks
+    unanswered_after_seconds: 3        # a SYN with no reply by then counts as failed
+    finding_hold_seconds: 120          # flows match a finding for this long afterwards
+    alert_cooldown_seconds: 60         # one alert per ongoing pattern per interval
+    max_sources: 5000                  # memory limits
+    max_attempts_per_source: 5000
+    max_pending: 50000
+    port_scan:                         # one source, one target, many ports, mostly failing
+      min_unique_ports: 25             # SUSPICIOUS from here
+      attack_unique_ports: 100         # ATTACK from here
+      min_failure_ratio: 0.6
+    host_sweep:                        # one source, one port, many hosts, mostly failing
+      min_unique_hosts: 20
+      attack_unique_hosts: 100
+      min_failure_ratio: 0.8
+    failed_connections:                # one source retrying one dead service
+      min_failures: 20
+      min_failure_ratio: 0.8
+    repeated_attempts:                 # many new connections to one service
+      min_attempts: 60
+    connection_rate:
+      min_attempts_per_second: 20
+    syn_flood:                         # judged per source
+      min_syn_per_second: 100
+      min_unanswered_ratio: 0.8
+    traffic_burst:                     # sustained tiny packets, so downloads do not match
+      min_packets_per_second: 3000
+      max_mean_payload_bytes: 100
+  correlation:
+    # A model attack label with no behavioural support is ATTACK at or above this
+    # score and SUSPICIOUS below it. This sets the label shown, not a probability.
+    ml_attack_min_confidence: 0.90
+    # Added to the risk when the model and the behaviour layer agree on a flow.
+    corroboration_bonus: 10
+    # Added to a finding's risk each time the pattern continues past the cooldown.
+    repeat_bonus_per_event: 3
+    repeat_bonus_cap: 15
+    behaviour_severity:
+      port_scan: 0.75
+      host_sweep: 0.75
+      failed_connections: 0.50
+      repeated_attempts: 0.45
+      connection_rate: 0.50
+      syn_flood: 0.90
+      traffic_burst: 0.50
+
+# ---------------------------------------------------------------------------
+# Live network capture (Phase 6)
+# ---------------------------------------------------------------------------
+network:
+  # null -> Scapy's default interface. Use `python scripts/list_interfaces.py`
+  # to print the exact names available on this machine.
+  interface: null
+  # BPF capture filter. "ip or ip6" ignores ARP/LLDP noise. "" = capture all.
+  bpf_filter: "ip"
+  # Seconds after a flow STARTS at which it is closed and classified, even if it
+  # is still active. This is CICFlowMeter's rule, so live durations stay within
+  # the range the model saw in training.
+  flow_timeout: 120.0
+  # Flows with fewer packets are dropped on the timeout and flush paths, as in
+  # CICFlowMeter. Flows closed by RST or FIN are always kept.
+  min_packets_per_flow: 2
+  activity_timeout: 5.0                # CICFlowMeter "Active/Idle" threshold
+  subflow_timeout: 1.0                 # CICFlowMeter subflow separation gap
+  # How often the flow manager sweeps for expired flows.
+  sweep_interval: 2.0
+  # Safety valve: maximum simultaneously tracked flows.
+  max_active_flows: 20000
+  # 0 = capture until stopped.
+  capture_duration: 0
+  # Only capture packets, never transmit. Enforced in code; do not change.
+  read_only: true
+
+# ---------------------------------------------------------------------------
+# Explainable AI (Phases 8 & 9)
+# ---------------------------------------------------------------------------
+xai:
+  enabled: true
+  top_k_features: 8
+  # Rows sampled from the training set to use as the SHAP/LIME background.
+  background_samples: 200
+  # Compute a SHAP explanation inline for every alert. Only done when a *fast*
+  # explainer is available (TreeExplainer / LinearExplainer); otherwise the
+  # explanation is computed on demand from the AI Explanation page.
+  explain_alerts_inline: true
+  shap:
+    max_evals: 200                     # KernelExplainer budget (slow models only)
+  lime:
+    num_samples: 1000
+    num_features: 10
+    discretize_continuous: true
+  # Optional second opinion from a local model in Ollama, run on request from the
+  # AI Explanation page. It never changes a stored prediction or alert. Only a server
+  # on this computer is accepted, so flow data stays on this machine.
+  local_llm:
+    enabled: true
+    base_url: "http://localhost:11434"
+    model: "qwen2.5-coder:7b"
+    timeout_seconds: 180
+    keep_alive: "2m"                   # how long the model stays loaded in memory
+
+# ---------------------------------------------------------------------------
+# Database (Phase 10)
+# ---------------------------------------------------------------------------
+database:
+  journal_mode: "WAL"
+  timeout: 30.0
+  # Rows older than this are pruned by Database.prune(); 0 disables pruning.
+  retention_days: 30
+
+# ---------------------------------------------------------------------------
+# Dashboard (Phase 11)
+# ---------------------------------------------------------------------------
+dashboard:
+  title: "NetLens · Explainable NIDS"
+  refresh_interval: 5                  # seconds between live auto-refreshes
+  recent_rows: 200                     # rows shown in the live tables
+  theme: "dark"
+  default_mode: "DEMO"                 # DEMO | LIVE
+
+# ---------------------------------------------------------------------------
+# Demo / simulation mode (Phase 12)
+# ---------------------------------------------------------------------------
+demo:
+  # Flow records replayed by demo mode. Generated by scripts/make_demo_data.py.
+  source_file: "data/demo/demo_flows.csv"
+  # Flows replayed per second.
+  replay_rate: 4.0
+  loop: true
+  # Fraction of replayed flows that are attacks (only used by the synthetic
+  # generator when no real dataset is available).
+  attack_ratio: 0.30
+  synthetic_rows: 4000

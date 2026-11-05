@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Project artefacts
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/demo/*
+!data/demo/.gitkeep
+models/trained/*
+!models/trained/.gitkeep
+models/preprocessing/*
+!models/preprocessing/.gitkeep
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.pcap
+*.pcapng
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+@"
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+node_modules/
+MachineLearningCSV.zip
+MachineLearningCVE/*.csv
+"@ | Add-Content .gitignore

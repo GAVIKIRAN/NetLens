@@ -1,0 +1,32 @@
+# Streamlit theme for the XAI-NIDS dashboard.
+[theme]
+base = "dark"
+primaryColor = "#4f93e4"
+backgroundColor = "#141415"
+secondaryBackgroundColor = "#232325"
+textColor = "#ededed"
+# Both fall back to system fonts when there is no internet connection.
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, 'Segoe UI', sans-serif"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap, Consolas, monospace"
+baseRadius = "0.5rem"
+borderColor = "#2a2a2d"
+showWidgetBorder = true
+codeBackgroundColor = "#232325"
+codeTextColor = "#a1a1a6"
+dataframeBorderColor = "#2a2a2d"
+dataframeHeaderBackgroundColor = "#19191b"
+
+[theme.sidebar]
+backgroundColor = "#0f0f10"
+secondaryBackgroundColor = "#19191b"
+borderColor = "#2a2a2d"
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+headless = true
+fileWatcherType = "auto"
+
+[browser]
+gatherUsageStats = false
