@@ -309,7 +309,23 @@ CIC-IDS2017** — the script says so loudly too.
 
 ## 6. Dataset setup
 
-### 6.1 The easy way
+### 6.1 Dataset download links
+
+The project uses the **CIC-IDS2017 `MachineLearningCSV.zip`** archive.
+
+- **Official CIC-IDS2017 dataset page:** https://www.unb.ca/cic/datasets/ids-2017.html
+- **Kaggle mirror:** https://www.kaggle.com/datasets/chethuhn/network-intrusion-dataset
+
+Download `MachineLearningCSV.zip` from the official dataset page (recommended), or use the Kaggle mirror. The archive is approximately 224 MB and is intentionally not stored in this GitHub repository because GitHub rejects individual files larger than 100 MB.
+
+After downloading, install it with:
+
+```bat
+python scripts\download_dataset.py --zip C:\Users\you\Downloads\MachineLearningCSV.zip
+python scripts\download_dataset.py --verify
+```
+
+### 6.2 The easy way
 
 ```bat
 python scripts\download_dataset.py
@@ -353,7 +369,7 @@ kaggle datasets download -d chethuhn/network-intrusion-dataset
 python scripts\download_dataset.py --zip network-intrusion-dataset.zip
 ```
 
-### 6.2 Or do it by hand
+### 6.3 Or do it by hand
 
 Download from <https://www.unb.ca/cic/datasets/ids-2017.html> and copy the CSVs
 into `data\raw\`. The file list and what the loader does with them are in
@@ -1147,5 +1163,4 @@ when only metadata is recorded.
 Ghorbani, *"Toward Generating a New Intrusion Detection Dataset and Intrusion
 Traffic Characterization"*, 4th International Conference on Information Systems
 Security and Privacy (ICISSP), Portugal, January 2018.
-#   N e t L e n s  
- 
+#
