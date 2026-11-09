@@ -5,7 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from dashboard.components import charts, metrics, tables
+import html
+
+from dashboard.components import charts, metrics, tables, ui
 from dashboard.state import load_database
 from src.utils.helpers import human_bytes
 
@@ -19,53 +21,22 @@ def render() -> None:
     if stats["captured_flows"] == 0:
         st.info(
             "No flows have been recorded yet. Start monitoring from the "
-            "**Live Monitor** page (DEMO mode replays saved records safely)."
+            "Live monitor page (DEMO mode replays saved records safely)."
         )
         return
 
     metrics.stat_row(
         [
-            {"label": "Flows recorded", "value": f"{stats['captured_flows']:,}", "accent": "blue"},
+            {"label": "Flows recorded", "value": f"{stats['captured_flows']:,}"},
             {"label": "Packets", "value": f"{stats['total_packets']:,}"},
             {"label": "Bytes", "value": human_bytes(stats["total_bytes"])},
-            {"label": "Attack share", "value": f"{stats['attack_percentage']:.1f}%", "accent": "red"},
+            {"label": "Attack share", "value": f"{stats['attack_percentage']:.1f}%",
+             "accent": True},
         ]
     )
 
-    st.divider()
-    row1 = st.columns(2)
-    with row1[0]:
-        protocols = database.protocol_distribution()
-        tables.chart_with_table(
-            charts.magnitude_bar(
-                list(protocols["protocol"]),
-                list(protocols["flows"]),
-                title="Protocol distribution",
-                x_title="flows",
-                height=280,
-                hover_suffix=" flows",
-            ),
-            protocols,
-            key="ta_proto",
-        )
-    with row1[1]:
-        talkers = database.top_talkers(10)
-        tables.chart_with_table(
-            charts.magnitude_bar(
-                list(talkers["src_ip"]),
-                list(talkers["bytes"].fillna(0)),
-                title="Top sources by volume",
-                x_title="bytes",
-                height=340,
-                value_format="{:,.0f}",
-                hover_suffix=" bytes",
-            ),
-            talkers,
-            key="ta_talkers",
-        )
-
-    row2 = st.columns(2)
-    with row2[0]:
+    volume_row = st.columns([2, 1])
+    with volume_row[0]:
         volume = database.query(
             "SELECT strftime('%Y-%m-%dT%H:%M', timestamp) AS bucket, "
             "SUM(byte_count) AS bytes, SUM(packet_count) AS packets, COUNT(*) AS flows "
@@ -76,19 +47,33 @@ def render() -> None:
                 volume, x_column="bucket", y_column="packets",
                 title="Packet volume over time", y_title="packets",
             ),
-            volume,
-            key="ta_packets",
+            volume, key="ta_packets", meta="per minute",
         )
-    with row2[1]:
+    with volume_row[1]:
+        protocols = database.protocol_distribution()
+        tables.list_card(
+            "Protocols",
+            ui.ranked_list_html(zip(protocols["protocol"], protocols["flows"])),
+            key="ta_proto", meta="flows",
+        )
+
+    trend_row = st.columns([2, 1])
+    with trend_row[0]:
         timeline = database.timeline("minute")
         tables.chart_with_table(
             charts.timeline_chart(timeline, title="Attack trend over time"),
-            timeline,
-            key="ta_trend",
+            timeline, key="ta_trend", meta="per minute",
+        )
+    with trend_row[1]:
+        talkers = database.top_talkers(10)
+        tables.list_card(
+            "Top sources by volume",
+            ui.ranked_list_html(zip(talkers["src_ip"], talkers["bytes"].fillna(0)),
+                                label_html=lambda ip: f'<span class="mono">{html.escape(ip)}</span>'),
+            key="ta_talkers", meta="bytes",
         )
 
-    st.divider()
-    st.subheader("Flow duration and size")
+    st.subheader("Flow duration and classes")
     duration = database.query(
         """
         SELECT CASE
@@ -112,26 +97,21 @@ def render() -> None:
 
     row3 = st.columns(2)
     with row3[0]:
-        tables.chart_with_table(
-            charts.magnitude_bar(
-                list(duration["bucket"]), list(duration["flows"]),
-                title="Flow duration distribution", x_title="flows", height=300,
-            ),
-            duration,
-            key="ta_duration",
+        tables.list_card(
+            "Flow duration",
+            ui.ranked_list_html(zip(duration["bucket"], duration["flows"]),
+                                sort=False, accent_first=False),
+            key="ta_duration", meta="flows",
         )
     with row3[1]:
         classes = database.class_distribution()
-        tables.chart_with_table(
-            charts.class_distribution_bar(
-                classes, "prediction", "count",
-                title="Predicted class distribution (all flows)", height=340,
-            ),
-            classes,
-            key="ta_classes",
+        tables.list_card(
+            "Predicted classes",
+            ui.ranked_list_html(zip(classes["prediction"], classes["count"]),
+                                label_html=ui.attack_badge, limit=8),
+            key="ta_classes", meta="all flows",
         )
 
-    st.divider()
     st.subheader("Flow records")
     limit = st.slider("Rows", 50, 2000, 300, 50, key="ta_rows")
     flows = database.query(
@@ -141,7 +121,7 @@ def render() -> None:
         (int(limit),),
     )
     tables.dataframe(flows, height=440)
-    st.download_button(
+    ui.export_button(
         "Download flow records (CSV)",
         data=flows.to_csv(index=False).encode("utf-8"),
         file_name="nids_flows.csv",

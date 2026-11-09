@@ -1,18 +1,18 @@
-"""Plotly figures for the dashboard.
+"""Plotly figures and the shared chart style for the dashboard.
 
-Design rules applied here (see :mod:`dashboard.styles.theme` for the palette):
+Every chart uses the ``netlens`` Plotly template registered below (matplotlib
+gets matching rcParams from :func:`apply_matplotlib_style`):
 
-* the form is chosen by the data's job - magnitude comparisons are horizontal
-  bars in a **single hue**, identity comparisons use the fixed categorical
-  order, signed values use the **diverging** blue/red pair, and part-to-whole
-  uses a stacked bar rather than a two-slice pie;
-* categorical hues are never cycled: past seven classes the tail is folded into
-  one neutral "Other" bucket;
-* marks are thin, gridlines are solid hairlines one shade off the surface, and
-  stacked/adjacent fills are separated by a 2 px gap drawn in the surface
-  colour rather than by an outline;
-* labels are applied selectively (endpoints and extremes), never on every point,
-  and every chart is paired with a table view by its caller.
+* backgrounds are Carbon, the card surface charts sit on; gridlines are
+  Charcoal hairlines; tick labels are muted DM Mono;
+* one accent per chart: the series that matters (attack traffic, the leading
+  bar) is Signal Orange and everything else is a neutral step;
+* signed SHAP/LIME weights use the cyan <-> orange diverging pair;
+* fills are flat, with 2 px surface-coloured gaps between adjacent marks.
+
+Secondary comparisons (class counts, protocols, top talkers) are drawn as
+ranked lists by :func:`dashboard.components.ui.ranked_list_html`, so each page
+has one main chart and smaller data blocks of a different kind.
 """
 
 from __future__ import annotations
@@ -22,19 +22,68 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 
 from dashboard.styles import theme
 from src.features.contract import label_for
 
 BAR_GAP = 2  # px, drawn in the surface colour to separate adjacent fills
-BAR_RADIUS = 4  # px, rounded data end of every bar
+BAR_RADIUS = 4  # px - the "small" radius from DESIGN.md
 FEW_POINTS = 12  # below this, line charts also draw markers so a point is visible
+TEMPLATE_NAME = "netlens"
+
+
+def _rgba(hex_colour: str, alpha: float) -> str:
+    value = hex_colour.lstrip("#")
+    r, g, b = (int(value[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _register_template() -> None:
+    layout = {k: (dict(v) if isinstance(v, dict) else v) for k, v in theme.PLOTLY_LAYOUT.items()}
+    template = go.layout.Template(layout=layout)
+    template.layout.colorscale = dict(
+        sequential=theme.sequential_scale(),
+        diverging=[[i / 9, c] for i, c in enumerate(theme.DIVERGING)],
+    )
+    pio.templates[TEMPLATE_NAME] = template
+    pio.templates.default = TEMPLATE_NAME
+
+
+def apply_matplotlib_style() -> None:
+    """Matching dark rcParams for any matplotlib figure (e.g. SHAP's own plots)."""
+    try:
+        import matplotlib as mpl
+    except ImportError:  # pragma: no cover - matplotlib is a hard dependency
+        return
+    mpl.rcParams.update({
+        "figure.facecolor": theme.SURFACE,
+        "axes.facecolor": theme.SURFACE,
+        "savefig.facecolor": theme.SURFACE,
+        "axes.edgecolor": theme.GRID,
+        "axes.labelcolor": theme.TEXT_MUTED,
+        "axes.titlecolor": theme.TEXT_PRIMARY,
+        "axes.grid": True,
+        "grid.color": theme.GRID,
+        "grid.linewidth": 0.8,
+        "xtick.color": theme.TEXT_MUTED,
+        "ytick.color": theme.TEXT_MUTED,
+        "text.color": theme.TEXT_SECONDARY,
+        "legend.facecolor": theme.SURFACE,
+        "legend.edgecolor": theme.GRID,
+        "axes.prop_cycle": mpl.cycler(color=list(theme.SERIES)),
+        "font.family": ["Inter", "DejaVu Sans", "sans-serif"],
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+    })
+
+
+_register_template()
+apply_matplotlib_style()
 
 
 def _base_figure(title: str = "", height: int = 320) -> go.Figure:
-    figure = go.Figure()
-    layout = {k: (dict(v) if isinstance(v, dict) else v) for k, v in theme.PLOTLY_LAYOUT.items()}
-    figure.update_layout(**layout)
+    figure = go.Figure(layout=dict(template=TEMPLATE_NAME))
     figure.update_layout(height=height, title_text=title, showlegend=False)
     return figure
 
@@ -84,7 +133,10 @@ def attack_split_bar(benign: int, attack: int, height: int = 176) -> go.Figure:
                 text=[f"{name} · {value:,} ({share:.1f}%)"] if share >= 12 else [""],
                 textposition="inside",
                 insidetextanchor="middle",
-                textfont=dict(color="#ffffff", size=12),
+                textfont=dict(
+                    color=theme.ABYSS if colour == theme.ATTACK else theme.WHITE,
+                    size=12, family=theme.FONT_MONO,
+                ),
                 hovertemplate=f"{name}: %{{x:,}} flows ({share:.1f}%)<extra></extra>",
             )
         )
@@ -151,7 +203,7 @@ def magnitude_bar(
     # Names, not figures, so they stay in the sans; mono would squeeze a narrow card.
     figure.update_yaxes(
         showgrid=False,
-        tickfont=dict(family=theme.PLOTLY_LAYOUT["font"]["family"], color=theme.TEXT_SECONDARY, size=12),
+        tickfont=dict(family=theme.FONT_BODY, color=theme.TEXT_SECONDARY, size=12),
     )
     return figure
 
@@ -236,10 +288,7 @@ def timeline_chart(
             marker=dict(color=theme.ATTACK, **marker),
             line=dict(color=theme.ATTACK, width=2, shape="spline", smoothing=0.4),
             fill="tozeroy",
-            fillgradient=dict(
-                type="vertical",
-                colorscale=[[0.0, "rgba(229,72,77,0)"], [1.0, "rgba(229,72,77,0.22)"]],
-            ),
+            fillcolor=_rgba(theme.ATTACK, 0.12),
             hovertemplate="Attack flows: %{y:,}<extra></extra>",
         )
     )
@@ -285,15 +334,10 @@ def volume_area_chart(
             x=data[x_column],
             y=data[y_column],
             mode="lines+markers" if len(data) < FEW_POINTS else "lines",
-            marker=dict(
-                size=8, color=theme.SEQUENTIAL_MAIN, line=dict(color=theme.SURFACE, width=2)
-            ),
-            line=dict(color=theme.SEQUENTIAL_MAIN, width=2, shape="spline", smoothing=0.4),
+            marker=dict(size=8, color=theme.CLOUD, line=dict(color=theme.SURFACE, width=2)),
+            line=dict(color=theme.CLOUD, width=1.5, shape="spline", smoothing=0.4),
             fill="tozeroy",
-            fillgradient=dict(
-                type="vertical",
-                colorscale=[[0.0, "rgba(110,110,117,0)"], [1.0, "rgba(110,110,117,0.24)"]],
-            ),
+            fillcolor=_rgba(theme.STEEL, 0.14),
             hovertemplate="%{x}<br>%{y:,.0f}<extra></extra>",
         )
     )
@@ -355,7 +399,7 @@ def contribution_chart(
     )
     figure.update_yaxes(
         showgrid=False,
-        tickfont=dict(family=theme.PLOTLY_LAYOUT["font"]["family"], color=theme.TEXT_SECONDARY, size=12),
+        tickfont=dict(family=theme.FONT_BODY, color=theme.TEXT_SECONDARY, size=12),
     )
     return figure
 
@@ -401,7 +445,7 @@ def confusion_heatmap(
             hovertemplate=hover,
             colorbar=dict(
                 title=dict(text=colour_title, font=dict(color=theme.TEXT_MUTED, size=11)),
-                tickfont=dict(color=theme.TEXT_MUTED, size=10),
+                tickfont=dict(color=theme.TEXT_MUTED, size=10, family=theme.FONT_MONO),
                 outlinewidth=0,
                 thickness=12,
             ),
@@ -421,8 +465,8 @@ def confusion_heatmap(
                 showarrow=False,
                 font=dict(
                     # The scale brightens with value, so bright cells need dark text.
-                    color="#0b111c" if display[row_index, col_index] >= threshold else theme.TEXT_PRIMARY,
-                    size=10,
+                    color=theme.ABYSS if display[row_index, col_index] >= threshold else theme.TEXT_PRIMARY,
+                    size=10, family=theme.FONT_MONO,
                 ),
             )
     figure.update_layout(margin=dict(l=8, r=8, t=44, b=8))
@@ -465,7 +509,7 @@ def risk_band_bar(counts: Mapping[str, int], *, height: int = 260) -> go.Figure:
     figure = _base_figure("Alerts by severity band", height=height)
     figure.add_trace(
         go.Bar(
-            x=[band.title() for band in order],
+            x=list(order),
             y=values,
             marker=dict(
                 color=[theme.risk_color(band) for band in order],
@@ -474,7 +518,7 @@ def risk_band_bar(counts: Mapping[str, int], *, height: int = 260) -> go.Figure:
             ),
             text=[f"{v:,}" for v in values],
             textposition="outside",
-            textfont=dict(color=theme.TEXT_SECONDARY, size=11),
+            textfont=dict(color=theme.TEXT_SECONDARY, size=11, family=theme.FONT_MONO),
             cliponaxis=False,
             hovertemplate="%{x}: %{y:,} alerts<extra></extra>",
         )
@@ -506,6 +550,8 @@ def importance_bar(
 
 
 __all__ = [
+    "TEMPLATE_NAME",
+    "apply_matplotlib_style",
     "empty_figure",
     "attack_split_bar",
     "magnitude_bar",

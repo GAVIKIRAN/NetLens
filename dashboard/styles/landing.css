@@ -1,0 +1,201 @@
+/* NetLens landing page - DESIGN.md "Signal lights through dark lattice".
+   Loaded only on the landing page, on top of theme.css. Tokens come from the
+   project's root theme.css (--color-*, --text-*, --spacing-*, --radius-*) and
+   from theme.py (--font-display, --r-pill ...). */
+
+/* ================================================================ shell == */
+.stApp, [data-testid="stMain"] { overflow-x: clip; }
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+.block-container, [data-testid="stMainBlockContainer"] {
+  max-width: calc(var(--page-max) + 2 * var(--spacing-24)) !important;
+  padding: 0 var(--spacing-24) 0 !important;
+}
+[data-testid="stMain"] [data-testid="stVerticalBlock"] { gap: var(--spacing-24); }
+
+/* Full-bleed band inside the centred container. */
+.lp-light {
+  margin-inline: calc(50% - 50vw) !important;
+  padding-inline: max(var(--spacing-24), calc(50vw - 50% + var(--spacing-24))) !important;
+}
+
+/* ================================================================= hero == */
+.lp-hero { display: grid; gap: var(--spacing-20); max-width: 620px; padding-top: var(--spacing-64); }
+.lp-eyebrow {
+  display: inline-flex; align-items: center; gap: var(--spacing-9); width: fit-content;
+  font: 400 var(--text-caption)/1.33 var(--font-mono); text-transform: uppercase; color: var(--color-snow);
+  border: 1px solid var(--color-steel); border-radius: var(--radius-full); padding: 4px 12px;
+}
+.lp-dot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; }
+.stApp .lp-hero h1 {
+  font: 600 var(--text-display)/var(--leading-display) var(--font-display) !important;
+  letter-spacing: var(--tracking-display) !important; text-transform: uppercase;
+  color: var(--color-white) !important; margin: 0 !important; padding: 0 !important;
+}
+.stApp .lp-hero h2 {
+  font: 500 var(--text-heading-sm)/var(--leading-heading-sm) var(--font-display) !important;
+  letter-spacing: 0.02em !important; color: var(--color-snow) !important; margin: 0 !important; padding: 0 !important;
+}
+.stApp .lp-hero p {
+  font: 400 var(--text-body-lg)/1.5 var(--font-inter) !important; color: var(--color-cloud) !important;
+  max-width: 34rem; margin: 0 !important;
+}
+.st-key-lp_ctas { margin-top: var(--spacing-4); }
+.st-key-lp_ctas .stButton button, .st-key-lp_close .stButton button { min-height: 44px; }
+
+.lp-trust {
+  display: flex; flex-wrap: wrap; gap: var(--spacing-12) var(--spacing-32);
+  list-style: none; margin: var(--spacing-24) 0 var(--spacing-64) !important; padding: 0 !important;
+}
+.stApp .lp-trust li {
+  display: inline-flex; align-items: center; gap: var(--spacing-9); margin: 0 !important;
+  font: 400 var(--text-caption)/1.33 var(--font-mono) !important; color: var(--text-3) !important; text-transform: uppercase;
+}
+.lp-trust svg { width: 16px; height: 16px; color: var(--color-steel); }
+
+
+.lp-visual { position: relative; height: clamp(360px, 44vw, 600px); }
+.lp-lattice { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Fade the lattice into the canvas at its edges. */
+.lp-visual::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 45%, var(--color-abyss) 78%);
+}
+.lp-node { transform-box: fill-box; transform-origin: center; animation: lp-on 420ms var(--ease) both; animation-delay: calc(150ms + var(--i, 0) * 60ms); }
+@keyframes lp-on { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+
+/* ============================================================ sections == */
+.lp-section { padding-block: var(--spacing-64) 0; scroll-margin-top: 48px; }
+.lp-light { scroll-margin-top: 48px; }
+.lp-section-head { display: grid; gap: var(--spacing-12); margin-bottom: var(--spacing-32); max-width: 720px; }
+.lp-kicker { font: 400 var(--text-caption)/1.33 var(--font-mono); text-transform: uppercase; color: var(--color-signal-orange); }
+.stApp .lp-section-head h2 {
+  font: 500 var(--text-heading)/var(--leading-heading) var(--font-display) !important;
+  letter-spacing: 0.033em !important; color: var(--color-white) !important; margin: 0 !important; padding: 0 !important;
+}
+.stApp .lp-section-head p { font: 400 var(--text-body)/1.5 var(--font-inter) !important; color: var(--color-cloud) !important; margin: 0 !important; }
+
+/* Light section: the surface stack flips (DESIGN.md). */
+.lp-light { background: var(--color-white); padding-block: var(--spacing-64) !important; margin-top: var(--spacing-24) !important; }
+.stApp .lp-light .lp-section-head h2 { color: var(--color-abyss) !important; }
+.lp-light > * { max-width: var(--page-max); margin-inline: auto; }
+
+/* Orange product cards. */
+.lp-products { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-24); }
+.lp-product {
+  display: flex; flex-direction: column; gap: var(--spacing-12);
+  background: var(--color-signal-orange); border-radius: var(--radius-lg); padding: var(--spacing-24);
+  color: var(--color-abyss); min-height: 340px;
+}
+.lp-product-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: auto; padding-bottom: var(--spacing-32); }
+.lp-step {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--color-white); color: var(--color-abyss); font: 500 var(--text-body-sm)/1 var(--font-display);
+}
+.lp-dots { width: 96px; height: auto; color: var(--color-white); }
+.lp-cat { font: 400 var(--text-caption)/1.33 var(--font-mono); text-transform: uppercase; color: var(--color-abyss); opacity: .75; }
+.stApp .lp-product h3 {
+  font: 500 var(--text-heading-sm)/var(--leading-heading-sm) var(--font-display) !important;
+  letter-spacing: 0.033em !important; color: var(--color-abyss) !important; margin: 0 !important; padding: 0 !important;
+}
+/* Abyss text on orange: 6.8:1, where white would be 3:1. */
+.stApp .lp-product p { font: 400 var(--text-body)/1.5 var(--font-inter) !important; color: var(--color-abyss) !important; opacity: .85; margin: 0 !important; }
+
+/* Dark category cards, two columns. */
+.lp-families { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-24); }
+.lp-family { background: var(--color-carbon); border: 1px solid var(--color-charcoal); border-radius: var(--radius-lg); padding: var(--spacing-24); }
+.lp-family header { display: flex; align-items: center; gap: var(--spacing-9); margin-bottom: var(--spacing-20); }
+.lp-family header span { font: 400 var(--text-caption)/1.33 var(--font-mono); text-transform: uppercase; color: var(--color-snow); }
+.lp-family header b { margin-left: auto; font: 400 var(--text-caption)/1.33 var(--font-mono); color: var(--text-3); }
+.lp-cells { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--color-charcoal); border: 1px solid var(--color-charcoal); border-radius: var(--radius-md); overflow: hidden; }
+.lp-cell {
+  background: var(--color-carbon); padding: var(--spacing-16); min-height: 56px; box-sizing: border-box;
+  display: flex; align-items: center; font: 500 var(--text-body-sm)/1.25 var(--font-display); letter-spacing: 0.02em; color: var(--color-white);
+}
+
+/* Figures sit on the dark canvas with the global stat strip. */
+#numbers .nl-stats { border-radius: var(--radius-lg); }
+
+/* ============================================================ closing == */
+.st-key-lp_close {
+  margin-top: var(--spacing-64); padding: var(--spacing-48) !important;
+  background: var(--color-carbon); border: 1px solid var(--color-charcoal); border-radius: var(--radius-lg);
+  align-items: flex-start;
+}
+.stApp .lp-close-text h2 {
+  font: 500 var(--text-heading)/var(--leading-heading) var(--font-display) !important; letter-spacing: 0.033em !important;
+  text-transform: uppercase; color: var(--color-white) !important; margin: 0 0 var(--spacing-9) !important; padding: 0 !important;
+}
+.stApp .lp-close-text p { font: 400 var(--text-body-lg)/1.5 var(--font-inter) !important; color: var(--color-cloud) !important; margin: 0 !important; }
+.lp-footer {
+  display: flex; justify-content: space-between; gap: var(--spacing-16); flex-wrap: wrap;
+  border-top: 1px solid var(--color-charcoal); margin-top: var(--spacing-48); padding: var(--spacing-24) 0 var(--spacing-48);
+  font: 400 var(--text-caption)/1.33 var(--font-mono); color: var(--text-3); text-transform: uppercase;
+}
+
+/* ========================================================= responsive == */
+@media (max-width: 1100px) {
+  .stApp .lp-hero h1 { font-size: var(--text-heading-lg) !important; line-height: var(--leading-heading-lg) !important; letter-spacing: var(--tracking-heading-lg) !important; }
+  .lp-products { grid-template-columns: 1fr; }
+  .lp-product { min-height: 0; }
+}
+@media (max-width: 760px) {
+  .block-container, [data-testid="stMainBlockContainer"] { padding: 0 var(--spacing-16) !important; }
+  .lp-light { padding-inline: var(--spacing-16) !important; margin-inline: calc(-1 * var(--spacing-16)) !important; }
+  .lp-hero { padding-top: var(--spacing-32); }
+  .stApp .lp-hero h1 { font-size: 40px !important; line-height: 1.05 !important; letter-spacing: 1.3px !important; }
+  .stApp .lp-hero h2 { font-size: var(--text-subheading) !important; }
+  .stApp .lp-section-head h2, .stApp .lp-close-text h2 { font-size: var(--text-heading-sm) !important; }
+  .lp-families { grid-template-columns: 1fr; }
+  .lp-visual { height: 280px; }
+  .st-key-lp_close { padding: var(--spacing-24) !important; }
+}
+@media (prefers-reduced-motion: reduce) { .lp-node { animation: none; } }
+
+/* ============================================================== motion == */
+/* Landing only: first-impression traffic, so this page carries the motion.
+   Entrances are transform + opacity on the strong ease-out (--ease). Each
+   element animates once, when it mounts; Streamlit keeps unchanged elements
+   between reruns, so nothing replays on a click. */
+@keyframes lp-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Hero: the copy assembles top to bottom, 70 ms apart. */
+.lp-hero > * { animation: lp-rise 560ms var(--ease) both; }
+.lp-hero > :nth-child(1) { animation-delay: 60ms; }
+.lp-hero > :nth-child(2) { animation-delay: 130ms; }
+.lp-hero > :nth-child(3) { animation-delay: 200ms; }
+.lp-hero > :nth-child(4) { animation-delay: 270ms; }
+.st-key-lp_ctas { animation: lp-rise 560ms var(--ease) 340ms both; }
+.lp-trust { animation: lp-fade 600ms var(--ease) 460ms both; }
+/* The lattice fades in under its node lights (which already pop on). */
+.lp-lattice { animation: lp-fade 900ms var(--ease) 120ms both; }
+
+/* Sections reveal as they scroll into view: CSS scroll-driven, no script.
+   Browsers without view timelines simply show everything. */
+@supports (animation-timeline: view()) {
+  .lp-section-head, .lp-product, .lp-family, #numbers .nl-stats, .lp-close-text, .st-key-lp_close .stButton {
+    animation: lp-rise linear both;
+    animation-timeline: view();
+    animation-range: entry 5% entry 45%;
+  }
+  /* Cards in a row arrive a beat apart. */
+  .lp-product:nth-child(2), .lp-family:nth-child(2n) { animation-range: entry 12% entry 52%; }
+  .lp-product:nth-child(3) { animation-range: entry 19% entry 59%; }
+}
+
+/* Hover: product and coverage cards lift a little. Pointer devices only. */
+.lp-product, .lp-family { transition: transform 220ms var(--ease), border-color 220ms var(--ease); }
+@media (hover: hover) and (pointer: fine) {
+  .lp-product:hover { transform: translateY(-4px); }
+  .lp-family:hover { transform: translateY(-3px); border-color: var(--color-steel); }
+}
+
+/* Reduced motion: keep the fades that aid reading, drop all movement. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-hero > *, .st-key-lp_ctas, .lp-trust, .lp-lattice { animation: lp-fade 200ms ease both !important; }
+  .lp-section-head, .lp-product, .lp-family, #numbers .nl-stats, .lp-close-text, .st-key-lp_close .stButton {
+    animation: none !important;
+  }
+  .lp-product:hover, .lp-family:hover { transform: none !important; }
+}

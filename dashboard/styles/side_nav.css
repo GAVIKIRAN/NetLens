@@ -1,0 +1,175 @@
+/* Floating side navigation (dashboard/components/side_nav.py), landing page
+   and console. Every colour maps onto the project's existing tokens. */
+:root {
+  --nav-bg: var(--color-abyss);
+  --nav-tile: rgba(15, 18, 20, 0.82);          /* obsidian, slightly see-through */
+  --nav-tile-active: var(--color-charcoal);     /* one tonal step up = raised */
+  --nav-icon: var(--color-snow);
+  --nav-label-bg: var(--color-white);
+  --nav-label-text: var(--color-abyss);
+  --accent: var(--color-signal-orange);
+  --nav-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --nav-size: 56px;
+}
+
+/* ================================================================ tiles == */
+.sn-tile {
+  position: relative; display: grid; place-items: center;
+  width: var(--nav-size); height: var(--nav-size); box-sizing: border-box;
+  border-radius: 16px; background: var(--nav-tile);
+  border: 1px solid rgba(240, 245, 250, 0.08);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--nav-icon); text-decoration: none !important;
+  transition: transform 220ms var(--nav-spring), background-color 160ms ease, border-color 160ms ease;
+}
+/* Icons are CSS masks (st.html strips inline SVG): the colour is currentColor. */
+.sn-ico {
+  display: block; width: 24px; height: 24px; background-color: currentColor; opacity: .6;
+  -webkit-mask: var(--sn-mask) center / contain no-repeat; mask: var(--sn-mask) center / contain no-repeat;
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+.sn-logo { display: block; width: 44px; height: 44px; background: center / contain no-repeat; }
+.sn-tile[aria-current="true"] { background: var(--nav-tile-active); border-color: rgba(240, 245, 250, 0.16); transform: scale(1.08); }
+.sn-tile[aria-current="true"] { color: var(--accent); }
+/* The theme colours every .stApp link orange; tiles set their own ink. */
+.stApp a.sn-tile { color: var(--nav-icon); }
+.stApp a.sn-tile[aria-current="true"] { color: var(--accent); }
+.stApp a.sn-tile--cta { color: var(--color-abyss); }
+.sn-tile[aria-current="true"] .sn-ico { opacity: 1; }
+
+/* Logo tile: the mark fills it, no frame. */
+.sn-tile--logo { background: transparent; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Way into the console: the one accent tile. */
+.sn-tile--cta { background: var(--accent); border-color: var(--accent); color: var(--color-abyss); }
+.sn-tile--cta .sn-ico { opacity: 1; }
+
+/* Label pill: slides out to the right on hover / keyboard focus. */
+.sn-label {
+  position: absolute; left: calc(100% + 10px); top: 50%;
+  transform: translate(-6px, -50%); opacity: 0; pointer-events: none; white-space: nowrap;
+  padding: 4px 10px; border-radius: 8px;
+  background: var(--nav-label-bg); color: var(--nav-label-text);
+  font: 700 11px/1.4 var(--font-display, var(--font-ui)); letter-spacing: .04em; text-transform: uppercase;
+  transition: opacity 180ms ease, transform 220ms var(--nav-spring);
+  z-index: 2;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sn-tile:hover { transform: scale(1.1); }
+  .sn-tile:hover .sn-ico { opacity: 1; }
+  .sn-tile:hover .sn-label { opacity: 1; transform: translate(0, -50%); }
+}
+.sn-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sn-tile:focus-visible .sn-ico { opacity: 1; }
+.sn-tile:focus-visible .sn-label { opacity: 1; transform: translate(0, -50%); }
+
+/* ========================================================= landing rail == */
+/* st.html wraps the nav in an element container; keep it out of the page flow. */
+[data-testid="stElementContainer"]:has(.sn[data-sn]) {
+  position: absolute !important; width: 0 !important; height: 0 !important; margin: 0 !important;
+}
+.sn { position: fixed; left: 16px; top: 50%; transform: translateY(-50%); z-index: 60; }
+.sn ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sn li { margin: 0; padding: 0; }
+.sn .sn-brand { margin-bottom: 8px; }
+.sn .sn-foot { margin-top: 8px; }
+#top, #how-it-works, #coverage, #numbers { scroll-margin-top: 24px; }
+
+/* ========================================================= console rail == */
+/* One fixed column of native Streamlit buttons, restyled as tiles. */
+.stApp .st-key-rail {
+  position: fixed !important; left: 16px; top: 50%; transform: translateY(-50%); z-index: 60;
+  width: var(--nav-size) !important; gap: 8px !important; overflow: visible !important;
+}
+.stApp .st-key-rail [data-testid="stElementContainer"],
+.stApp .st-key-rail .stButton { width: var(--nav-size) !important; overflow: visible !important; }
+.stApp .st-key-rail .sn-tile--logo { margin-bottom: 8px; }
+.sn-sep { border: 0 !important; height: 1px; width: 28px; margin: 4px auto !important; background: var(--color-charcoal); }
+
+.stApp .st-key-rail button[data-testid^="stBaseButton"] {
+  position: relative; width: var(--nav-size) !important; height: var(--nav-size) !important;
+  min-height: 0 !important; padding: 0 !important; justify-content: center;
+  border-radius: 16px !important; background: var(--nav-tile) !important;
+  border: 1px solid rgba(240, 245, 250, 0.08) !important; color: var(--nav-icon) !important;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: none !important;
+  transition: transform 220ms var(--nav-spring), background-color 160ms ease, border-color 160ms ease !important;
+}
+.stApp .st-key-rail button[data-testid^="stBaseButton"] > div { gap: 0 !important; overflow: visible; }
+/* Material icon */
+.stApp .st-key-rail button[data-testid^="stBaseButton"] [data-testid="stIconMaterial"],
+.stApp .st-key-rail button[data-testid^="stBaseButton"] span[translate="no"] {
+  font-size: 24px !important; margin: 0 !important; opacity: .6; transition: opacity 160ms ease, color 160ms ease;
+}
+/* The button label becomes the hover pill. */
+.stApp .st-key-rail button[data-testid^="stBaseButton"] [data-testid="stMarkdownContainer"] {
+  position: absolute; left: calc(100% + 10px); top: 50%;
+  transform: translate(-6px, -50%); opacity: 0; pointer-events: none; white-space: nowrap;
+  padding: 4px 10px; border-radius: 8px; background: var(--nav-label-bg);
+  transition: opacity 180ms ease, transform 220ms var(--nav-spring); z-index: 2;
+  /* Streamlit sizes this box to the button (54 px, max-width 100%), which
+     cropped the pill to "COMM". Let it size to its text instead. */
+  width: max-content !important; max-width: none !important;
+}
+.stApp .st-key-rail button[data-testid^="stBaseButton"] [data-testid="stMarkdownContainer"] p {
+  color: var(--nav-label-text) !important; font: 700 11px/1.4 var(--font-display, var(--font-ui)) !important;
+  letter-spacing: .04em !important; text-transform: uppercase; margin: 0 !important;
+}
+/* Active page */
+.stApp .st-key-rail button[data-testid^="stBaseButton-primary"] {
+  background: var(--nav-tile-active) !important; border-color: rgba(240, 245, 250, 0.16) !important;
+  transform: scale(1.08);
+}
+.stApp .st-key-rail button[data-testid^="stBaseButton-primary"] [data-testid="stIconMaterial"],
+.stApp .st-key-rail button[data-testid^="stBaseButton-primary"] span[translate="no"] { opacity: 1; color: var(--accent) !important; }
+@media (hover: hover) and (pointer: fine) {
+  .stApp .st-key-rail button[data-testid^="stBaseButton"]:hover:not(:disabled) {
+    transform: scale(1.1); background: var(--nav-tile-active) !important;
+  }
+  .stApp .st-key-rail button[data-testid^="stBaseButton"]:hover [data-testid="stIconMaterial"],
+  .stApp .st-key-rail button[data-testid^="stBaseButton"]:hover span[translate="no"] { opacity: 1; }
+  .stApp .st-key-rail button[data-testid^="stBaseButton"]:hover [data-testid="stMarkdownContainer"] {
+    opacity: 1; transform: translate(0, -50%);
+  }
+}
+.stApp .st-key-rail button[data-testid^="stBaseButton"]:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
+.stApp .st-key-rail button[data-testid^="stBaseButton"]:focus-visible [data-testid="stMarkdownContainer"] { opacity: 1; transform: translate(0, -50%); }
+.stApp .st-key-rail button[data-testid^="stBaseButton"]:active:not(:disabled) { transform: scale(0.96); }
+
+/* Short screens: smaller tiles so the whole rail stays on screen. */
+@media (max-height: 820px) and (min-width: 768px) {
+  :root { --nav-size: 46px; }
+  .stApp .st-key-rail { gap: 6px !important; }
+  .sn-logo { width: 38px; height: 38px; }
+}
+
+/* Keep page content clear of the rail on desktop. */
+@media (min-width: 768px) and (max-width: 1600px) {
+  .block-container, [data-testid="stMainBlockContainer"] { padding-left: 104px !important; padding-right: 104px !important; }
+}
+
+/* ============================================ mobile: bottom floating dock == */
+@media (max-width: 767px) {
+  .sn { left: 50%; top: auto; bottom: 16px; transform: translateX(-50%); }
+  .sn ul, .stApp .st-key-rail {
+    flex-direction: row !important; padding: 6px; gap: 6px !important; border-radius: 20px;
+    background: rgba(4, 7, 10, 0.72); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1px solid rgba(240, 245, 250, 0.08);
+  }
+  .sn .sn-brand, .sn .sn-foot { margin: 0; }
+  .stApp .st-key-rail {
+    left: 12px; right: 12px; top: auto; bottom: 12px; transform: none; width: auto !important;
+    overflow-x: auto !important; overflow-y: hidden !important; justify-content: flex-start;
+  }
+  .stApp .st-key-rail .sn-tile--logo { margin: 0; }
+  .sn-sep { width: 1px; height: 28px; margin: auto 2px !important; }
+  :root { --nav-size: 50px; }
+  .sn-label, .stApp .st-key-rail button[data-testid^="stBaseButton"] [data-testid="stMarkdownContainer"] { display: none; }
+  .block-container, [data-testid="stMainBlockContainer"] { padding-bottom: 104px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sn-tile, .sn-ico, .sn-label,
+  .stApp .st-key-rail button[data-testid^="stBaseButton"],
+  .stApp .st-key-rail button[data-testid^="stBaseButton"] [data-testid="stMarkdownContainer"] { transition: none !important; }
+  .sn-tile[aria-current="true"], .sn-tile:hover,
+  .stApp .st-key-rail button[data-testid^="stBaseButton"] { transform: none !important; }
+}

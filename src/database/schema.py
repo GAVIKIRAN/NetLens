@@ -31,6 +31,22 @@ SESSION_TAGGED_TABLES: tuple[str, ...] = (
     "behaviour_events",
 )
 
+#: Covering indexes for the dashboard aggregates (statistics, protocol mix, top
+#: talkers). Rows carry wide feature columns, so a full scan reads far more than
+#: these few fields; scanning the index took top talkers from ~5 s to ~0.04 s on
+#: a 130k-flow database. Applied by ``Database.initialise`` *after* the column
+#: migrations, because ``final_classification`` is a v2 column.
+SUMMARY_INDEXES: tuple[str, ...] = (
+    # v1 of the flows index lacked timestamp (volume charts still scanned the table).
+    "DROP INDEX IF EXISTS idx_flows_summary",
+    "CREATE INDEX IF NOT EXISTS idx_flows_summary_v2 ON flows "
+    "(src_ip, protocol_name, packet_count, byte_count, duration_seconds, mode, timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_pred_summary  ON predictions "
+    "(final_classification, is_attack, confidence, risk_score, mode)",
+    "CREATE INDEX IF NOT EXISTS idx_pred_timeline ON predictions "
+    "(timestamp, is_attack, risk_score, mode)",
+)
+
 CREATE_STATEMENTS: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS schema_info (
@@ -169,6 +185,7 @@ __all__ = [
     "CREATE_STATEMENTS",
     "PREDICTION_COLUMNS_V2",
     "SCHEMA_VERSION",
+    "SUMMARY_INDEXES",
     "SESSION_TAGGED_TABLES",
     "TABLES",
 ]

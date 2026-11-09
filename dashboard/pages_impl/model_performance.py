@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from dashboard.components import charts, compat, metrics, tables
+from dashboard.components import charts, compat, metrics, tables, ui
 from dashboard.state import (
     load_dataset_profile,
     load_explainer,
@@ -15,6 +15,7 @@ from dashboard.state import (
     load_training_metadata,
     load_training_metrics,
 )
+from dashboard.styles import theme
 from src.features.contract import contract_summary
 
 PAGE_TITLE = "Model Performance"
@@ -76,29 +77,24 @@ def render() -> None:
             "install the real dataset and run `python scripts/train_model.py`."
         )
 
-    st.markdown(
-        " ".join(
-            [
-                metrics.pill(f"selected · {best.get('name', '?')}", "ok"),
-                metrics.pill(
-                    f"metric · {metrics_payload.get('primary_metric', 'macro_f1')}", "info"
-                ),
-                metrics.pill(f"trained {metadata.get('created_at', 'unknown')}", "info"),
-            ]
-        ),
-        unsafe_allow_html=True,
+    metrics.status_strip(
+        [
+            (f"selected · {best.get('name', '?')}", theme.NODE_GREEN),
+            (f"metric · {metrics_payload.get('primary_metric', 'macro_f1')}", None),
+            (f"trained {metadata.get('created_at', 'unknown')}", None),
+        ]
     )
 
     metrics.stat_row(
         [
             {"label": "Test accuracy", "value": f"{test.get('accuracy', 0):.4f}",
-             "delta": "micro average over all flows", "accent": "blue"},
+             "delta": "micro average over all flows"},
             {"label": "Macro F1", "value": f"{test.get('f1_macro', 0):.4f}",
-             "delta": "every class weighted equally", "accent": "blue"},
+             "delta": "every class weighted equally", "highlight": True},
             {"label": "Detection rate", "value": f"{(test.get('binary') or {}).get('detection_rate', 0):.4f}",
-             "delta": "recall over all attack classes", "accent": "low"},
+             "delta": "recall over all attack classes"},
             {"label": "False-positive rate", "value": f"{(test.get('binary') or {}).get('false_positive_rate', 0):.4f}",
-             "delta": "benign flows wrongly alerted", "accent": "critical"},
+             "delta": "benign flows wrongly alerted"},
         ]
     )
 
@@ -111,7 +107,6 @@ def render() -> None:
           "once, afterwards, and never influenced any decision.",
     )
 
-    st.divider()
     tabs = st.tabs(
         ["Model comparison", "Confusion matrix", "Classification report",
          "Per-class metrics", "Dataset", "Feature contract", "Global importance"]
@@ -128,34 +123,30 @@ def render() -> None:
 
         if not test_frame.empty and "macro_f1" in test_frame.columns:
             scored = test_frame.dropna(subset=["macro_f1"])
-            tables.chart_with_table(
-                charts.magnitude_bar(
-                    list(scored["model"]),
-                    list(scored["macro_f1"]),
-                    title="Macro F1 on the test split",
-                    x_title="macro F1",
-                    height=260,
-                    value_format="{:.4f}",
-                ),
-                scored[["model", "macro_f1", "weighted_f1", "accuracy"]],
-                key="mp_macro",
+            tables.list_card(
+                "Macro F1 on the test split",
+                ui.ranked_list_html(zip(scored["model"], scored["macro_f1"]), fmt="{:.4f}"),
+                key="mp_macro", meta="higher is better",
             )
 
     # ------------------------------------------------------ confusion matrix
     with tabs[1]:
         if test.get("confusion_matrix"):
-            normalise = st.toggle("Normalise by true class", value=True, key="mp_norm")
-            figure = charts.confusion_heatmap(
-                test["confusion_matrix"], test["class_names"], normalise=normalise
-            )
-            frame = pd.DataFrame(
-                test["confusion_matrix"],
-                index=test["class_names"],
-                columns=test["class_names"],
-            )
-            compat.plotly_chart(figure, key="mp_cm")
-            with st.expander("Show confusion matrix as a table"):
-                compat.dataframe(frame, hide_index=False)
+            with tables.card("mp_cm"):
+                ui.render(ui.card_header_html("Confusion matrix", "test split"))
+                normalise = st.toggle("Normalise by true class", value=True, key="mp_norm")
+                figure = charts.confusion_heatmap(
+                    test["confusion_matrix"], test["class_names"], normalise=normalise
+                )
+                figure.update_layout(title_text="", margin_t=8)
+                frame = pd.DataFrame(
+                    test["confusion_matrix"],
+                    index=test["class_names"],
+                    columns=test["class_names"],
+                )
+                compat.plotly_chart(figure, key="mp_cm")
+                with st.expander("Data table"):
+                    compat.dataframe(frame, hide_index=False)
         else:
             st.caption("No confusion matrix stored.")
 
@@ -174,17 +165,13 @@ def render() -> None:
             st.caption("No per-class metrics stored.")
         else:
             tables.dataframe(per_class)
-            tables.chart_with_table(
-                charts.magnitude_bar(
-                    list(per_class["class"]),
-                    list(per_class["recall"]),
-                    title="Recall per class (test split)",
-                    x_title="recall",
-                    height=max(280, 34 * len(per_class) + 90),
-                    value_format="{:.3f}",
+            tables.list_card(
+                "Recall per class",
+                ui.ranked_list_html(
+                    zip(per_class["class"], per_class["recall"]), fmt="{:.3f}",
+                    label_html=ui.attack_badge, accent_first=False,
                 ),
-                per_class[["class", "support", "precision", "recall", "f1"]],
-                key="mp_recall",
+                key="mp_recall", meta="test split",
             )
 
     # ---------------------------------------------------------------- dataset
@@ -199,21 +186,17 @@ def render() -> None:
             ]
         )
         st.caption("Source directory: " + str(dataset.get("source_directory", "")))
-        st.write("Files used:", ", ".join(dataset.get("files", [])) or "-")
+        st.caption("Files used: " + (", ".join(dataset.get("files", [])) or "none recorded"))
 
         counts = dataset.get("class_counts_loaded", {})
         if counts:
             frame = pd.DataFrame(
                 [{"class": k, "rows": v} for k, v in sorted(counts.items(), key=lambda kv: -kv[1])]
             )
-            tables.chart_with_table(
-                charts.magnitude_bar(
-                    list(frame["class"]), list(frame["rows"]),
-                    title="Training-set class distribution",
-                    x_title="rows", height=max(280, 32 * len(frame) + 90),
-                ),
-                frame,
-                key="mp_classes",
+            tables.list_card(
+                "Training-set class distribution",
+                ui.ranked_list_html(zip(frame["class"], frame["rows"]), label_html=ui.attack_badge),
+                key="mp_classes", meta="rows",
             )
 
         cleaning = dataset.get("cleaning", {})
@@ -300,10 +283,14 @@ def render() -> None:
                     st.session_state["mp_ranking"] = ranking
         ranking = st.session_state.get("mp_ranking", [])
         if ranking:
-            tables.chart_with_table(
-                charts.importance_bar(ranking, height=460, top_k=15),
-                pd.DataFrame(ranking),
-                key="mp_global_chart",
+            tables.list_card(
+                "Top contributing features",
+                ui.ranked_list_html(
+                    [(r.get("label") or r.get("feature", ""), r.get("importance", 0.0))
+                     for r in ranking[:15]],
+                    fmt="{:.4f}",
+                ),
+                key="mp_global_chart", meta="mean |SHAP|",
             )
 
 

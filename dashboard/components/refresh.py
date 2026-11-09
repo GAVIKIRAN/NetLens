@@ -32,7 +32,7 @@ def auto_refresh_supported() -> bool:
 
 def refresh_controls(key: str, default_interval: int = 5) -> tuple[bool, int]:
     """Render the 'auto refresh' toggle + interval selector. Returns both."""
-    columns = st.columns([1, 1, 3])
+    columns = st.columns([1, 1, 3], vertical_alignment="bottom")
     with columns[0]:
         enabled = st.toggle(
             "Auto-refresh",
@@ -54,8 +54,7 @@ def refresh_controls(key: str, default_interval: int = 5) -> tuple[bool, int]:
             key=f"{key}_interval",
         )
     with columns[2]:
-        st.write("")
-        if st.button("Refresh now", key=f"{key}_manual"):
+        if st.button("Refresh now", type="secondary", key=f"{key}_manual"):
             st.rerun()
     return bool(enabled), int(interval)
 

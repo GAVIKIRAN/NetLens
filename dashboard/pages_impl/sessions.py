@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from dashboard.components import metrics, tables
+from dashboard.components import metrics, tables, ui
 from dashboard.state import load_database
 
 PAGE_TITLE = "Sessions"
@@ -38,7 +38,7 @@ def render() -> None:
         # Legacy rows (recorded before sessions existed) can still be exported.
         legacy = database.export_session(None)
         if not legacy.empty:
-            st.download_button(
+            ui.export_button(
                 f"Download pre-session data ({len(legacy):,} flows, CSV)",
                 data=legacy.to_csv(index=False).encode("utf-8"),
                 file_name="nids_legacy.csv",
@@ -64,7 +64,6 @@ def render() -> None:
         summary[col] = summary[col].astype(str).str.slice(0, 19).str.replace("T", " ")
     tables.dataframe(summary, height=260)
 
-    st.divider()
     st.subheader("Review and download a session")
 
     options = list(sessions["id"])
@@ -78,20 +77,20 @@ def render() -> None:
     row = sessions[sessions["id"] == choice].iloc[0]
     metrics.stat_row(
         [
-            {"label": "Flows", "value": f"{int(row['flows_processed']):,}", "accent": "blue"},
-            {"label": "Attacks", "value": f"{int(row['attacks_detected']):,}", "accent": "red"},
-            {"label": "Alerts", "value": f"{int(row['alerts_raised']):,}", "accent": "high"},
-            {"label": "Behaviour", "value": f"{int(row['behaviour_findings']):,}", "accent": "high"},
+            {"label": "Flows", "value": f"{int(row['flows_processed']):,}"},
+            {"label": "Attacks", "value": f"{int(row['attacks_detected']):,}"},
+            {"label": "Alerts", "value": f"{int(row['alerts_raised']):,}"},
+            {"label": "Behaviour", "value": f"{int(row['behaviour_findings']):,}"},
         ]
     )
 
     export = database.export_session(int(choice))
     if export.empty:
-        st.caption("This session recorded no classified flows.")
+        st.caption("This session recorded no classified flows")
     else:
         tables.dataframe(export, height=380)
 
-    st.download_button(
+    ui.export_button(
         f"Download session #{int(choice)} (CSV)",
         data=export.to_csv(index=False).encode("utf-8"),
         file_name=f"nids_session_{int(choice)}.csv",
