@@ -70,6 +70,8 @@ def plotly_chart(figure, *, key: str | None = None) -> None:
     """``st.plotly_chart`` with the right width spelling for this Streamlit."""
     kwargs: dict[str, Any] = dict(_width_kwargs())
     kwargs["config"] = {"displayModeBar": False, "displaylogo": False, "responsive": True}
+    # theme=None: Streamlit's own Plotly theme would override the "netlens" template.
+    kwargs["theme"] = None
     if key:
         kwargs["key"] = key
     try:

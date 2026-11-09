@@ -25,6 +25,7 @@ from src.database.schema import (
     PREDICTION_COLUMNS_V2,
     SCHEMA_VERSION,
     SESSION_TAGGED_TABLES,
+    SUMMARY_INDEXES,
     TABLES,
 )
 from src.utils.errors import DatabaseError
@@ -112,6 +113,8 @@ class Database:
                 columns = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
                 if "session_id" not in columns:
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN session_id INTEGER")
+            for statement in SUMMARY_INDEXES:
+                cursor.execute(statement)
             cursor.execute(
                 "INSERT OR REPLACE INTO schema_info (key, value) VALUES (?, ?)",
                 ("schema_version", str(SCHEMA_VERSION)),

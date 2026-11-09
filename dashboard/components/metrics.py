@@ -1,8 +1,10 @@
-"""Stat tiles, hero figures, status pills and risk badges.
+"""Figures, status, severity and page chrome, built from :mod:`ui`.
 
-Per the visualisation guidance a single headline number is a **stat tile**, not
-a one-bar chart, and a status colour is always paired with its text label so the
-meaning never rests on colour alone.
+Two rules hold everywhere:
+
+* severity is the four-light meter plus the band code - never colour alone;
+* **risk score** (a property of the situation) and **ML confidence** (a
+  property of the classifier) are separate figures with separate encodings.
 """
 
 from __future__ import annotations
@@ -11,227 +13,140 @@ import html
 import re
 from typing import Any, Mapping, Sequence
 
-import streamlit as st
-
+from dashboard.components import ui
 from dashboard.styles import theme
 
-ACCENTS = {
-    "blue": "accent-blue",
-    "red": "accent-red",
-    "low": "accent-low",
-    "medium": "accent-medium",
-    "high": "accent-high",
-    "critical": "accent-critical",
-}
+_e = html.escape
 
 
-def stat_tile(label: str, value: Any, delta: str = "", accent: str = "") -> None:
-    """One stat tile: an uppercase label, a large value and an optional note."""
-    accent_class = ACCENTS.get(str(accent).lower(), "")
-    st.markdown(
-        f"""
-        <div class="nids-tile {accent_class}">
-          <div class="label">{html.escape(str(label))}</div>
-          <div class="value">{html.escape(str(value))}</div>
-          <div class="delta">{html.escape(str(delta))}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+# ================================================================== figures ==
+def _cell(tile: Mapping[str, Any]) -> dict[str, Any]:
+    band = tile.get("band")
+    return {
+        "label": tile.get("label", ""),
+        "value": tile.get("value", ""),
+        "note": tile.get("delta", tile.get("note", "")),
+        "badge": tile.get("badge") or (ui.pips(band) if band else ""),
+        "accent": bool(tile.get("accent") or tile.get("highlight")),
+    }
 
 
 def stat_row(tiles: Sequence[Mapping[str, Any]]) -> None:
-    """Render a KPI row of stat tiles."""
-    if not tiles:
-        return
-    cells = "".join(
-        f'<div class="nids-tile"><div class="label">{html.escape(str(tile.get("label", "")))}</div>'
-        f'<div class="value">{html.escape(str(tile.get("value", "")))}</div>'
-        f'<div class="delta">{html.escape(str(tile.get("delta", "")))}</div></div>'
-        for tile in tiles
-    )
-    st.markdown(f'<div class="nids-stats">{cells}</div>', unsafe_allow_html=True)
+    """One strip of figures. Keys: label, value, delta, band, badge, accent."""
+    ui.stats([_cell(tile) for tile in tiles])
 
 
-def hero(value: Any, label: str, colour: str | None = None) -> None:
-    """The one number a page leads with."""
-    style = f' style="color:{colour}"' if colour else ""
-    st.markdown(
-        f"""
-        <div>
-          <div class="nids-hero-label">{html.escape(str(label))}</div>
-          <div class="nids-hero"{style}>{html.escape(str(value))}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def stat_tile(label: str, value: Any, delta: str = "", **extra: Any) -> None:
+    """A single figure (a one-cell strip)."""
+    stat_row([{"label": label, "value": value, "delta": delta, **extra}])
 
 
 def risk_badge(level: str, score: float | None = None) -> str:
-    """Inline HTML badge - colour plus the band's own name, never colour alone."""
-    band = str(level).upper()
-    icon = theme.STATUS_ICON.get(band, "●")
-    text = f"{icon} {band.title()}" + (f" · {score:.0f}" if score is not None else "")
-    return f'<span class="nids-risk {band}">{html.escape(text)}</span>'
+    return ui.severity_badge(level, score)
 
 
 def pill(text: str, kind: str = "info") -> str:
-    """Inline status pill (``ok``/``idle``/``warn``/``danger``/``info``)."""
-    return f'<span class="nids-pill {kind}">{html.escape(str(text))}</span>'
+    """Quiet status text (kept for older call sites)."""
+    return ui.status_text(text, {"ok": "live", "danger": "error"}.get(kind, "info"))
 
 
-def header(title: str, subtitle: str, pills: Sequence[str] = (), eyebrow: str = "") -> None:
-    """The page heading shown on every page."""
-    eyebrow_html = f'<div class="eyebrow">{html.escape(eyebrow)}</div>' if eyebrow else ""
-    st.markdown(
-        f"""<div class="nids-header"><div>{eyebrow_html}<h1>{html.escape(title)}</h1>
-        <div class="sub">{html.escape(subtitle)}</div></div>
-        <div class="pills">{"".join(pills)}</div></div>""",
-        unsafe_allow_html=True,
-    )
+def status_strip(items: Sequence[tuple[str, str | None]]) -> None:
+    """A mono meta line from ``(text, light colour or None)`` pairs."""
+    ui.meta_line(ui.meta_item(text, colour) for text, colour in items)
 
 
-#: Inline so it renders with no external asset and no internet connection.
-SHIELD_SVG = (
-    '<svg viewBox="0 0 40 40" fill="none" role="img" aria-label="NetLens shield" '
-    'stroke="currentColor" stroke-width="2.500" stroke-linecap="round" stroke-linejoin="round">'
-    '<path d="M20 4 33 9v10c0 8-5.400 14-13 17C12.400 33 7 27 7 19V9l13-5Z"/>'
-    '<path d="M12.500 20.500h4l2.200-5.500 3.600 9.500 2.200-4h3"/></svg>'
-)
+# ============================================================== page chrome ==
+def header(title: str, subtitle: str, meta: Sequence[str] = ()) -> None:
+    ui.page_header(title, subtitle, meta)
 
 
-def brand(name: str, tagline: str) -> None:
-    """The product mark at the top of the sidebar."""
-    st.markdown(
-        f"""<div class="nids-brand">{SHIELD_SVG}<div>
-        <div class="name">{html.escape(name)}</div>
-        <div class="tag">{html.escape(tagline)}</div></div></div>""",
-        unsafe_allow_html=True,
-    )
+def brand(name: str) -> None:
+    ui.render(f'<div class="nl-brand">{ui.wordmark_html(name)}<span class="nl-brand-tag">Console</span></div>')
 
 
 def system_card(
     running: bool, mode: str, flows: int, attacks: int, alerts: int, model: str, classes: int | None
 ) -> None:
-    """Live monitoring state and session counters for the sidebar."""
-    state = f"Monitoring · {mode}" if running else "Monitoring stopped"
-    model_row = (
-        f"<span>Model</span><b>{html.escape(model)} · {classes} classes</b>"
-        if classes is not None
-        else '<span>Model</span><b>Not trained</b>'
+    """Sidebar status: what is running, this session's counters, the model."""
+    state = ui.status_text(
+        f"{mode.title()} monitoring running" if running else "Monitoring stopped",
+        "live" if running else "idle",
     )
-    st.markdown(
-        f"""<div class="nids-system">
-        <div class="row"><span class="state"><i class="nids-dot{' on' if running else ''}"></i>
-        {html.escape(state)}</span></div>
-        <div class="mini">
-        <div><b>{flows:,}</b><span>flows</span></div>
-        <div><b>{attacks:,}</b><span>attacks</span></div>
-        <div><b>{alerts:,}</b><span>alerts</span></div></div>
-        <div class="model">{model_row}</div></div>""",
-        unsafe_allow_html=True,
+    model_value = f"{_e(model)} · {classes} classes" if classes is not None else "not trained"
+    ui.render(
+        '<div class="nl-side">'
+        '<div class="nl-side-label">Status</div>'
+        f'<div class="nl-side-state">{state}</div>'
+        + ui.kv_html(
+            [("Flows", f"{flows:,}"), ("Attacks", f"{attacks:,}"),
+             ("Alerts", f"{alerts:,}"), ("Model", model_value)],
+            compact=True,
+        )
+        + "</div>"
     )
 
 
 def posture_banner(
     band: str, attack_share: float, benign: int, attack: int, band_counts: Mapping[str, int]
 ) -> None:
-    """Threat posture: the page's headline, the traffic split and alerts by severity."""
+    """Threat posture in one panel: level, traffic split, alerts by band."""
     level = str(band).upper()
-    benign_share = max(0.0, 100.0 - float(attack_share))
+    share = max(0.0, min(100.0, float(attack_share)))
     segments = "".join(
-        f'<i style="width:{share:.2f}%;background:{colour}"></i>'
-        for share, colour in (
-            (benign_share, theme.BENIGN), (float(attack_share), theme.ATTACK)
-        )
-        if share > 0
-    )
-    bands = "".join(
-        f"<div>{risk_badge(name)}<b>{int(band_counts.get(name, 0)):,}</b></div>"
-        for name in ("CRITICAL", "HIGH", "MEDIUM", "LOW")
+        f'<i style="width:{width:.2f}%;background:{colour}"></i>'
+        for width, colour in ((100.0 - share, theme.BENIGN), (share, theme.ATTACK))
+        if width > 0
     )
     summary = {
         "CRITICAL": "Critical alerts are on record",
         "HIGH": "High-risk alerts are on record",
         "MEDIUM": "Medium-risk alerts are on record",
     }.get(level, "No alerts at medium risk or above")
-    st.markdown(
-        f"""<div class="nids-posture {level}">
-        <div><div class="k">Threat level</div>
-        <div class="band"><span class="mark">{theme.STATUS_ICON.get(level, "●")}</span>{level.title()}</div>
-        <div class="why">{summary}</div></div>
-        <div><div class="k">Attack share of classified flows</div>
-        <div class="share"><b>{float(attack_share):.1f}%</b>
-        <span>{attack:,} of {benign + attack:,} flows</span></div>
-        <div class="nids-split">{segments}</div>
-        <div class="nids-legend">
-        <span><i style="background:{theme.BENIGN}"></i>Benign {benign:,}</span>
-        <span><i style="background:{theme.ATTACK}"></i>Attack {attack:,}</span></div></div>
-        <div><div class="k" style="margin-bottom:.45rem">Stored alerts by severity</div>
-        <div class="nids-bands">{bands}</div></div></div>""",
-        unsafe_allow_html=True,
+    ui.render(
+        '<section class="nl-panel nl-posture">'
+        '<div><div class="k">Threat level</div>'
+        f'<div class="nl-level">{ui.pips(level, large=True)}<b>{_e(level.title())}</b></div>'
+        f'<div class="note">{_e(summary)}</div></div>'
+        '<div><div class="k">Attack share of classified flows</div>'
+        f'<div class="fig">{share:.1f}%</div>'
+        f'<div class="nl-split" aria-hidden="true">{segments}</div>'
+        '<div class="nl-legend">'
+        f'<span class="nl-tag">{ui.dot(theme.BENIGN)}<span>Benign <b class="mono">{benign:,}</b></span></span>'
+        f'<span class="nl-tag">{ui.dot(theme.ATTACK)}<span>Attack <b class="mono">{attack:,}</b></span></span>'
+        "</div></div>"
+        '<div><div class="k">Stored alerts by severity</div>'
+        f"{ui.severity_list_html(band_counts)}</div>"
+        "</section>"
     )
 
 
 def empty_state(title: str, body: str) -> None:
-    """Friendly first-run message; the caller adds the action underneath."""
-    st.markdown(
-        f"""<div class="nids-empty">{SHIELD_SVG}<h3>{html.escape(title)}</h3>
-        <p>{html.escape(body)}</p></div>""",
-        unsafe_allow_html=True,
-    )
+    ui.empty_state(title, body)
 
 
-def panel(title: str, body_markdown: str) -> None:
-    """A bordered explanatory panel."""
-    st.markdown(
-        f"""
-        <div class="nids-panel">
-          <h4>{html.escape(title)}</h4>
-          <div class="nids-note">{body_markdown}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def panel(title: str, body_markup: str) -> None:
+    """A panel of explanatory text. ``body_markup`` is trusted HTML from page code."""
+    ui.panel(f'<div class="nl-note">{body_markup}</div>', title=title)
 
 
 def note(text: str) -> None:
     # Markdown is not parsed inside an HTML block, so **bold** is converted here.
     body = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", str(text))
-    st.markdown(f'<div class="nids-note">{body}</div>', unsafe_allow_html=True)
+    ui.render(f'<div class="nl-note">{body}</div>')
 
 
 def confidence_vs_risk(confidence: float, risk_score: float, risk_level: str) -> None:
-    """Show confidence and risk side by side - they are different quantities."""
-    columns = st.columns(2)
-    with columns[0]:
-        stat_tile(
-            "Model confidence",
-            f"{float(confidence):.1%}",
-            "probability the model assigns to the predicted class",
-            accent="blue",
-        )
-    with columns[1]:
-        stat_tile(
-            "Risk score",
-            f"{float(risk_score):.0f} / 100",
-            f"severity band: {str(risk_level).title()}",
-            accent=str(risk_level).lower(),
-        )
+    """ML confidence and risk side by side, as separate figures."""
+    ui.stats([
+        {"label": "ML confidence", "value": f"{float(confidence):.1%}",
+         "note": "probability of the predicted class"},
+        {"label": "Risk score", "value": f"{float(risk_score):.0f} / 100",
+         "badge": ui.severity_badge(risk_level),
+         "note": "class severity, confidence and traffic volume"},
+    ])
 
 
 __all__ = [
-    "stat_tile",
-    "stat_row",
-    "hero",
-    "risk_badge",
-    "pill",
-    "header",
-    "brand",
-    "system_card",
-    "posture_banner",
-    "empty_state",
-    "panel",
-    "note",
-    "confidence_vs_risk",
+    "stat_tile", "stat_row", "risk_badge", "pill", "status_strip", "header", "brand",
+    "system_card", "posture_banner", "empty_state", "panel", "note", "confidence_vs_risk",
 ]

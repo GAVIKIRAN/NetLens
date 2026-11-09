@@ -1,25 +1,57 @@
-# Streamlit theme for the XAI-NIDS dashboard.
+# Streamlit theme for the NetLens dashboard.
+# Canonical values live in dashboard/styles/theme.py; this file mirrors them for
+# Streamlit's own widgets, which config can reach without CSS.
 [theme]
 base = "dark"
-primaryColor = "#4f93e4"
-backgroundColor = "#141415"
-secondaryBackgroundColor = "#232325"
-textColor = "#ededed"
-# Both fall back to system fonts when there is no internet connection.
-font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap, 'Segoe UI', sans-serif"
-codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap, Consolas, monospace"
-baseRadius = "0.5rem"
-borderColor = "#2a2a2d"
+primaryColor = "#ff6314"
+backgroundColor = "#04070a"
+secondaryBackgroundColor = "#0f1214"
+textColor = "#f0f5fa"
+borderColor = "#1a1d1f"
+linkColor = "#ff6314"
+linkUnderline = false
+
+# One interface family (Inter) and one partner for figures and meta (DM Mono).
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap, system-ui, 'Segoe UI', sans-serif"
+headingFont = "'Space Grotesk':https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap, Inter, system-ui, sans-serif"
+codeFont = "'DM Mono':https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap, Consolas, monospace"
+baseFontSize = 14
+headingFontWeights = [500, 500, 500, 500, 500, 500]
+headingFontSizes = ["28px", "20px", "16px", "14px", "13px", "13px"]
+codeFontSize = "13px"
+codeBackgroundColor = "#0f1214"
+codeTextColor = "#f0f5fa"
+metricValueFontSize = "28px"
+metricValueFontWeight = 400
+
+baseRadius = "8px"
+buttonRadius = "24px"
 showWidgetBorder = true
-codeBackgroundColor = "#232325"
-codeTextColor = "#a1a1a6"
-dataframeBorderColor = "#2a2a2d"
-dataframeHeaderBackgroundColor = "#19191b"
+showSidebarBorder = true
+
+dataframeBorderColor = "#1a1d1f"
+dataframeHeaderBackgroundColor = "#0f1214"
+dataframeHeaderTextColor = "#c6ced7"
+
+chartCategoricalColors = ["#ff6314", "#16c4ff", "#33ffac", "#5b76ff", "#ff2ad4", "#c6ced7"]
+chartSequentialColors = ["#14171a", "#2a1d17", "#40231a", "#57291b", "#6e2f1b", "#86361a", "#9f3d19", "#b94518", "#d94f16", "#ff6314"]
+chartDivergingColors = ["#16c4ff", "#1ba3d3", "#1f82a7", "#24617b", "#2f3a44", "#4a3127", "#7a3a1f", "#aa431b", "#d94f16", "#ff6314"]
+
+greenColor = "#33ffac"
+blueColor = "#16c4ff"
+violetColor = "#5b76ff"
+orangeColor = "#ff6314"
+redColor = "#ff2ad4"
+grayColor = "#8a929d"
 
 [theme.sidebar]
-backgroundColor = "#0f0f10"
-secondaryBackgroundColor = "#19191b"
-borderColor = "#2a2a2d"
+backgroundColor = "#0f1214"
+secondaryBackgroundColor = "#1a1d1f"
+textColor = "#c6ced7"
+borderColor = "#1a1d1f"
+primaryColor = "#ff6314"
+linkColor = "#ff6314"
+codeBackgroundColor = "#0f1214"
 
 [client]
 toolbarMode = "minimal"

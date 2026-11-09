@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import streamlit as st
 
-from dashboard.components import charts, metrics, tables
+from dashboard.components import charts, metrics, tables, ui
 from dashboard.state import load_database, load_explainer, load_predictor, load_settings
+from dashboard.styles import theme
 from src.features.contract import label_for
 from src.utils.errors import ExplainerError, NIDSError
 from src.xai.local_llm import DEFAULT_BASE_URL, OllamaClient, review_prediction
 
-PAGE_TITLE = "AI Explanation"
+PAGE_TITLE = "Explain a prediction"
 
 
 def _rebuild_result(record: dict, predictor):
@@ -24,6 +27,28 @@ def _rebuild_result(record: dict, predictor):
         for name in predictor.input_features
     }
     return predictor.predict_one(features)
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def _explain(prediction_id: int, use_lime: bool, top_k: int, model_name: str,
+             *, _record: dict, _predictor, _service) -> dict:
+    """SHAP and LIME for one stored prediction, computed once per
+    (prediction, settings, model). Without this every click on the page -
+    a slider, a toggle - recomputed LIME from scratch. Arguments starting with
+    an underscore are not part of the cache key."""
+    result = _rebuild_result(_record, _predictor)
+    return _service.explain_prediction(result, use_shap=True, use_lime=use_lime, top_k=top_k)
+
+
+@st.cache_data(show_spinner=False, ttl=30)
+def _installed_models(base_url: str) -> tuple[list[str], str]:
+    """Ask Ollama for its models at most every 30 s. When Ollama is not running,
+    each attempt waits for a connection timeout (about 4 s on Windows), which
+    used to be paid on every click on this page."""
+    try:
+        return OllamaClient(base_url, timeout=3.0).list_models(), ""
+    except ExplainerError as exc:
+        return [], str(exc)
 
 
 def _render_local_review(settings, record: dict, payload: dict, prediction_id: int) -> None:
@@ -44,14 +69,13 @@ def _render_local_review(settings, record: dict, payload: dict, prediction_id: i
         "right. This review also checks the protocol and ports, which the classifier "
         "never sees. It runs on this computer and doesn't change the stored prediction."
     )
-    try:
-        client = OllamaClient(
-            str(config.get("base_url", DEFAULT_BASE_URL)),
-            timeout=float(config.get("timeout_seconds", 180)),
-        )
-        installed = client.list_models()
-    except ExplainerError as exc:
-        st.info(f"{exc} The rest of this page works without it.")
+    client = OllamaClient(
+        str(config.get("base_url", DEFAULT_BASE_URL)),
+        timeout=float(config.get("timeout_seconds", 180)),
+    )
+    installed, error = _installed_models(client.base_url)
+    if error:
+        st.info(f"{error} The rest of this page works without it.")
         return
     if not installed:
         st.info("Ollama is running but has no models installed.")
@@ -64,7 +88,7 @@ def _render_local_review(settings, record: dict, payload: dict, prediction_id: i
         key="ax_llm_model",
     )
     key = f"ax_llm_review_{prediction_id}_{choice}"
-    if st.button("Review this prediction", key="ax_llm_run"):
+    if ui.secondary_button("Review this prediction", key="ax_llm_run"):
         with st.spinner(f"Asking {choice}. The first run can take a minute ..."):
             try:
                 st.session_state[key] = review_prediction(
@@ -115,62 +139,59 @@ def render() -> None:
         return
 
     status = service.status()
-    st.markdown(
-        " ".join(
-            [
-                metrics.pill(
-                    f"SHAP · {status['shap_explainer']}",
-                    "ok" if status["shap_available"] else "danger",
-                ),
-                metrics.pill(
-                    "LIME ready" if status["lime_available"] else "LIME unavailable",
-                    "ok" if status["lime_available"] else "danger",
-                ),
-                metrics.pill(
-                    "inline explanations on" if status["inline_explanations"]
-                    else "on-demand explanations only",
-                    "info",
-                ),
-            ]
-        ),
-        unsafe_allow_html=True,
+    metrics.status_strip(
+        [
+            (f"SHAP · {status['shap_explainer']}",
+             theme.NODE_GREEN if status["shap_available"] else theme.NODE_MAGENTA),
+            ("LIME ready" if status["lime_available"] else "LIME unavailable",
+             theme.NODE_GREEN if status["lime_available"] else theme.NODE_MAGENTA),
+            ("inline explanations on" if status["inline_explanations"]
+             else "on-demand explanations only", None),
+        ]
     )
     for message in status.get("errors", []):
         st.warning(message)
 
     # ----------------------------------------------------- pick a prediction
-    st.markdown("##### Select a prediction")
-    columns = st.columns([1, 1, 1, 2])
-    with columns[0]:
-        only_attacks = st.toggle("Attacks only", value=True, key="ax_attacks")
-    with columns[1]:
-        limit = st.number_input("Search depth", 20, 2000, 200, 20, key="ax_limit")
-    with columns[2]:
-        use_lime = st.toggle("Compute LIME", value=True, key="ax_lime")
-    with columns[3]:
-        top_k = st.slider("Features to show", 3, 20,
-                          int(settings.get("xai.top_k_features", 8)), key="ax_topk")
+    with st.container(key="card_ax_pick"):
+        ui.render(ui.card_header_html("Select a prediction"))
+        columns = st.columns([1, 1, 1, 2], vertical_alignment="bottom")
+        with columns[0]:
+            only_attacks = st.toggle("Attacks only", value=True, key="ax_attacks")
+        with columns[1]:
+            limit = st.number_input("Search depth", 20, 2000, 200, 20, key="ax_limit")
+        with columns[2]:
+            use_lime = st.toggle("Compute LIME", value=True, key="ax_lime")
+        with columns[3]:
+            top_k = st.slider("Features to show", 3, 20,
+                              int(settings.get("xai.top_k_features", 8)), key="ax_topk")
 
-    candidates = database.recent_predictions(int(limit), only_attacks=only_attacks)
-    if candidates.empty:
-        st.info(
-            "No stored predictions match. Start monitoring from the **Live Monitor** "
-            "page (DEMO mode is safe) and come back."
+        candidates = database.recent_predictions(int(limit), only_attacks=only_attacks)
+        if candidates.empty:
+            st.info(
+                "No stored predictions match. Start monitoring from the Live monitor "
+                "page (DEMO mode is safe) and come back."
+            )
+            return
+
+        # Labels built once - a per-option DataFrame filter cost ~1.5 s per rerun.
+        labels = {
+            int(row.id): (
+                f"#{int(row.id)} · {row.prediction} · "
+                f"confidence {float(row.confidence):.0%} · risk {float(row.risk_score):.0f} "
+                f"· {row.src_ip} → {row.dst_ip}"
+            )
+            for row in candidates[["id", "prediction", "confidence", "risk_score", "src_ip", "dst_ip"]]
+            .itertuples(index=False)
+        }
+
+        def _describe(prediction_id: int) -> str:
+            return labels.get(int(prediction_id), f"#{prediction_id}")
+
+        selected = st.selectbox(
+            "Prediction", candidates["id"].astype(int).tolist(),
+            format_func=_describe, key="ax_prediction",
         )
-        return
-
-    def _describe(prediction_id: int) -> str:
-        row = candidates[candidates["id"] == prediction_id].iloc[0]
-        return (
-            f"#{prediction_id} · {row['prediction']} · "
-            f"conf {float(row['confidence']):.0%} · risk {float(row['risk_score']):.0f} "
-            f"· {row['src_ip']}→{row['dst_ip']}"
-        )
-
-    selected = st.selectbox(
-        "Prediction", candidates["id"].astype(int).tolist(),
-        format_func=_describe, key="ax_prediction",
-    )
 
     record = database.get_prediction(int(selected))
     if record is None:
@@ -183,11 +204,12 @@ def render() -> None:
         )
         return
 
-    with st.spinner("Computing explanations ..."):
+    with st.spinner("Computing explanations"):
         try:
             result = _rebuild_result(record, predictor)
-            payload = service.explain_prediction(
-                result, use_shap=True, use_lime=bool(use_lime), top_k=int(top_k)
+            payload = _explain(
+                int(selected), bool(use_lime), int(top_k), predictor.model_name,
+                _record=record, _predictor=predictor, _service=service,
             )
         except NIDSError as exc:
             st.error(str(exc))
@@ -197,52 +219,51 @@ def render() -> None:
             return
 
     # ------------------------------------------------------------- headline
-    st.divider()
-    header = st.columns([1, 1, 2])
-    with header[0]:
-        metrics.stat_tile(
-            "Prediction", result.predicted_label,
-            f"stored as '{record.get('prediction')}'",
-            accent="red" if result.is_attack else "low",
-        )
-    with header[1]:
-        metrics.stat_tile(
-            "Risk band", str(result.risk.level).title(),
-            f"score {result.risk.score:.0f}/100", accent=str(result.risk.level).lower(),
-        )
-    with header[2]:
-        metrics.confidence_vs_risk(
-            result.confidence, result.risk.score, result.risk.level
-        )
+    # Prediction, confidence and risk: three separate figures, three encodings.
+    ui.stats([
+        {"label": "Prediction", "value": result.predicted_label,
+         "badge": ui.attack_badge(result.predicted_label),
+         "note": f"stored as {record.get('prediction')}"},
+        {"label": "ML confidence", "value": f"{result.confidence:.1%}",
+         "note": "probability the model gives the predicted class"},
+        {"label": "Risk score", "value": f"{result.risk.score:.0f} / 100",
+         "badge": ui.severity_badge(result.risk.level),
+         "note": "class severity, confidence and traffic volume"},
+    ])
 
-    if record.get("final_classification"):
-        st.markdown(
-            f"**IDS decision: {record['final_classification']}**  \n"
-            f"Model: {record.get('prediction')} · "
-            f"Behaviour: {record.get('behaviour_result') or 'None'}  \n"
-            f"{record.get('detection_reason') or ''}"
-        )
-
-    if record.get("ground_truth"):
-        st.caption(
-            f"Demo ground-truth label for this record: **{record['ground_truth']}** "
-            "(shown for transparency - the model was not told this)."
-        )
     if result.threshold_applied:
         st.warning(
-            f"The model's highest-scoring class was **{result.argmax_label}** at "
+            f"The model's highest-scoring class was {result.argmax_label} at "
             f"{result.argmax_confidence:.1%}, below the configured decision "
             f"threshold of {predictor.attack_threshold:.0%}, so this flow is "
             "reported as benign."
         )
 
-    st.markdown("###### Risk formula for this flow")
-    st.code(result.risk.formula, language="text")
+    facts = st.columns([1, 1])
+    with facts[0]:
+        decision = [
+            ("IDS decision",
+             html.escape(str(record.get("final_classification") or result.predicted_label))),
+            ("Model said", html.escape(str(record.get("prediction") or ""))),
+            ("Behaviour rules", html.escape(str(record.get("behaviour_result") or "none"))),
+        ]
+        if record.get("detection_reason"):
+            decision.append(("Reason", html.escape(str(record["detection_reason"]))))
+        if record.get("ground_truth"):
+            decision.append(("Demo label", html.escape(str(record["ground_truth"]))))
+        with tables.card("ax_decision"):
+            ui.render(ui.card_header_html("Decision") + ui.kv_html(decision))
+            if record.get("ground_truth"):
+                st.caption("The demo label is shown for transparency; the model was not told it")
+    with facts[1]:
+        with tables.card("ax_formula"):
+            ui.render(ui.card_header_html("Risk formula for this flow"))
+            st.code(result.risk.formula, language="text")
 
     # ------------------------------------------------------------ narrative
-    st.subheader("Human-readable explanation")
     narrative = payload.get("narrative") or {}
     with st.container(key="card_narrative"):
+        ui.render(ui.card_header_html("Explanation", "plain language"))
         st.markdown(f"**{narrative.get('headline', '')}**")
         st.markdown(narrative.get("summary", ""))
         for line in narrative.get("bullet_points", []):
@@ -252,79 +273,67 @@ def render() -> None:
     _render_local_review(settings, record, payload, int(selected))
 
     # ------------------------------------------------------------ SHAP/LIME
-    st.divider()
+    st.subheader("Feature contributions")
     panes = st.columns(2)
     with panes[0]:
-        st.subheader("SHAP")
         shap_payload = payload.get("shap")
         if shap_payload:
-            st.caption(
-                f"Explainer: **{shap_payload['explainer']}** · base value "
-                f"{shap_payload['base_value']:.4f}"
-            )
             tables.chart_with_table(
                 charts.contribution_chart(
-                    shap_payload["contributions"],
-                    title="SHAP contributions", top_k=int(top_k),
+                    shap_payload["contributions"], title="SHAP", top_k=int(top_k),
                 ),
                 tables.contribution_table(shap_payload["contributions"]),
                 key="ax_shap_chart",
+                meta=f"{shap_payload['explainer']} · base {shap_payload['base_value']:.4f}",
             )
         else:
-            st.caption("SHAP produced no explanation for this prediction.")
+            st.caption("SHAP produced no explanation for this prediction")
     with panes[1]:
-        st.subheader("LIME")
         lime_payload = payload.get("lime")
         if lime_payload:
-            st.caption(
-                f"Local surrogate fit R² = {lime_payload['r2_score']:.3f} · "
-                f"local prediction {lime_payload['local_prediction']:.3f}"
-            )
             tables.chart_with_table(
                 charts.contribution_chart(
-                    lime_payload["contributions"],
-                    title="LIME contributions", top_k=int(top_k),
+                    lime_payload["contributions"], title="LIME", top_k=int(top_k),
                 ),
                 tables.contribution_table(lime_payload["contributions"]),
                 key="ax_lime_chart",
+                meta=(f"surrogate R\u00b2 {lime_payload['r2_score']:.3f} · "
+                      f"local {lime_payload['local_prediction']:.3f}"),
             )
         elif use_lime:
-            st.caption("LIME produced no explanation for this prediction.")
+            st.caption("LIME produced no explanation for this prediction")
         else:
-            st.caption("LIME is switched off for this view.")
+            st.caption("LIME is switched off for this view")
 
     for message in payload.get("errors", []):
         st.warning(message)
 
     # ------------------------------------------------- probabilities + flow
-    st.divider()
     lower = st.columns([1, 1])
     with lower[0]:
-        probabilities = result.probabilities
-        tables.chart_with_table(
-            charts.probability_bar(probabilities),
-            pd.DataFrame(
-                [{"class": k, "probability": round(v, 6)} for k, v in
-                 sorted(probabilities.items(), key=lambda kv: -kv[1])]
+        probabilities = sorted(result.probabilities.items(), key=lambda kv: -kv[1])[:8]
+        tables.list_card(
+            "Class probabilities",
+            ui.ranked_list_html(
+                [(label, 100.0 * float(prob)) for label, prob in probabilities],
+                fmt="{:.1f}%", label_html=ui.attack_badge,
             ),
-            key="ax_proba",
+            key="ax_proba", meta="top 8",
         )
     with lower[1]:
-        st.markdown("###### Flow features used by the model")
-        shown = payload.get("top_features") or []
-        names = [str(entry.get("feature")) for entry in shown] or list(result.features)[:12]
-        rows = [
-            {
-                "Feature": label_for(name),
-                "Canonical name": name,
-                "Value": result.features.get(name),
-            }
-            for name in names
-        ]
-        tables.dataframe(pd.DataFrame(rows), height=360)
+        with tables.card("ax_features"):
+            ui.render(ui.card_header_html("Flow features used by the model"))
+            shown = payload.get("top_features") or []
+            names = [str(entry.get("feature")) for entry in shown] or list(result.features)[:12]
+            rows = [
+                {"Feature": label_for(name), "Canonical name": name,
+                 "Value": result.features.get(name)}
+                for name in names
+            ]
+            tables.dataframe(pd.DataFrame(rows), height=320)
 
     # --------------------------------------------- persist the explanation
-    if st.button("Save this explanation to the alert history"):
+    if ui.secondary_button("Save this explanation to the alert history"):
         try:
             database.update_prediction_explanation(
                 int(selected),
@@ -332,7 +341,7 @@ def render() -> None:
                 payload.get("top_features", []),
                 payload.get("explainer", "SHAP"),
             )
-            st.success("Explanation stored with prediction #%d." % int(selected))
+            st.success(f"Explanation stored with prediction #{int(selected)}")
         except NIDSError as exc:
             st.error(str(exc))
 

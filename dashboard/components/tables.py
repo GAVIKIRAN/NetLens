@@ -12,12 +12,12 @@ from typing import Any, Mapping, Sequence
 import pandas as pd
 import streamlit as st
 
-from dashboard.components import compat
+from dashboard.components import compat, ui
 from dashboard.styles import theme
 
-RISK_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
-#: The readable text shades of the status colours, matching the risk badges.
-BAND_TEXT = {**theme.STATUS, "CRITICAL": "#ee5d61"}
+RISK_ORDER = list(theme.RISK_ORDER)
+#: Severity node lights; each passes 4.5:1 as text on the Carbon table surface.
+BAND_TEXT = dict(theme.STATUS)
 
 
 def chart_with_table(
@@ -25,22 +25,40 @@ def chart_with_table(
     frame: pd.DataFrame | None,
     *,
     key: str,
-    table_label: str = "Show data table",
+    table_label: str = "Data table",
+    meta: str = "",
 ) -> None:
-    """Render a Plotly figure in a card, with its table-view twin in an expander."""
-    with _card(key):
+    """A Plotly figure in a card, with its table-view twin in a quiet disclosure.
+
+    The figure's title is lifted out of Plotly into the card header, so chart
+    cards and list cards share one heading style and alignment.
+    """
+    title = str(figure.layout.title.text or "")
+    figure.update_layout(title_text="", margin_t=8)
+    with card(key):
+        if title:
+            ui.render(ui.card_header_html(title, meta))
         compat.plotly_chart(figure, key=key)
         if frame is not None and not frame.empty:
             with st.expander(table_label, expanded=False):
                 compat.dataframe(frame)
 
 
-def _card(key: str):
-    """A stretching container; the key gives the stylesheet a stable class name."""
+def list_card(title: str, body_html: str, *, key: str, meta: str = "") -> None:
+    """A card holding a ranked list (or any HTML), the same height as its row."""
+    with card(key):
+        ui.render(ui.card_header_html(title, meta) + body_html)
+
+
+def card(key: str):
+    """A stretching container; the ``card_`` key makes the stylesheet draw it as a panel."""
     try:
         return st.container(key=f"card_{key}", height="stretch")
     except TypeError:  # pragma: no cover - older Streamlit
         return st.container(key=f"card_{key}")
+
+
+_card = card
 
 
 def _band_style(value: Any) -> str:
@@ -49,10 +67,10 @@ def _band_style(value: Any) -> str:
 
 
 def _band_label(value: Any) -> str:
-    """Add the band's icon, so severity never rests on colour alone."""
+    """The severity meter as text (``●●●○  HIGH``), for canvas-drawn table cells."""
     text = str(value)
     icon = theme.STATUS_ICON.get(text.upper())
-    return f"{icon}  {text.title()}" if icon else text
+    return f"{icon}  {text.upper()}" if icon else text
 
 
 def _default_columns(frame: pd.DataFrame) -> dict[str, Any]:
@@ -262,6 +280,8 @@ def sort_by_risk(frame: pd.DataFrame, column: str = "Band") -> pd.DataFrame:
 
 __all__ = [
     "chart_with_table",
+    "list_card",
+    "card",
     "dataframe",
     "format_predictions",
     "format_alerts",

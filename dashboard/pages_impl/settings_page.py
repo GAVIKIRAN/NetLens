@@ -45,7 +45,7 @@ def render() -> None:
             st.warning(f"Scapy is not usable: {message}. DEMO mode still works.")
         else:
             interfaces = list_interfaces()
-            st.markdown(f"Scapy default interface: `{default_interface()}`")
+            st.caption(f"Scapy default interface: `{default_interface()}`")
             if interfaces:
                 tables.dataframe(pd.DataFrame([i.to_dict() for i in interfaces]))
             else:
@@ -199,9 +199,9 @@ def render() -> None:
         counts = database.counts()
         metrics.stat_row(
             [
-                {"label": "Flows", "value": f"{counts['flows']:,}", "accent": "blue"},
+                {"label": "Flows", "value": f"{counts['flows']:,}"},
                 {"label": "Predictions", "value": f"{counts['predictions']:,}"},
-                {"label": "Alerts", "value": f"{counts['alerts']:,}", "accent": "red"},
+                {"label": "Alerts", "value": f"{counts['alerts']:,}"},
                 {"label": "System events", "value": f"{counts['system_events']:,}"},
             ]
         )
